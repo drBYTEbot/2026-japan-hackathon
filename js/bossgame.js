@@ -13,7 +13,7 @@ const GOAL_ROW = 14;
 
 const PLAYER = {
   maxhp: 280, atk: 34, def: 18, spd: 14,
-  special: { name: 'CODE BLAST', uses: 3, max: 3, pow: 65 },
+  special: { name: 'CODE BLAST', uses: 1, max: 1, pow: 336 },
   potions: 3,
 };
 const DAVID = {
