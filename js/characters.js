@@ -4,7 +4,7 @@ import { mulberry32, hashStr, clamp, roundRect as roundRectSt, pxTextCenter, TAU
 // Company directory (prizes in the claw machine). Preserved as given.
 export const EMPLOYEES = [
   'Saria','Noa','Feifan','Noah','Hana','Sumer','Shimpei','Misaki','David',
-  'Rajendra','Richard','Shin On','Lamu','Atul Anand','Sakuarko','Amelia','Mike',
+  'Rajendra','Richard','Shinon','Lamu','Atul Anand','Sakuarko','Amelia','Mike',
   'Millan','Mao','Nao','Tetsuya','Mutsumi','Mario','Sophia','Matt','Alex',
   'Masamichi','Kazunori','Samantha','Mustafa','Yushi','Yagiz','Takanori','Takeru',
   'Yu','Uchida','Obama','Jun','Ryuei','Ayuki','Satoshi','Hirokazu','Hiroyuki',
