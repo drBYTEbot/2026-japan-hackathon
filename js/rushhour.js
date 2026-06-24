@@ -121,15 +121,15 @@ export class RushHour {
       if (car) {
         pointer.consumed = true;
         const [lo, hi] = slideRange(car, this.cars);
-        this.drag = { car, lo, hi, off: 0, startC: car.c, startR: car.r, lastPx: this.axisPx(car) };
+        const startPx = car.dir === 'h' ? pointer.x : pointer.y;
+        this.drag = { car, lo, hi, off: 0, startC: car.c, startR: car.r, startPx };
       }
     }
     if (this.drag && pointer.down) {
-      const cur = this.axisPx(this.drag.car);
-      let off = (cur - this.drag.lastPx) / CELL + this.drag.off;
+      const cur = this.drag.car.dir === 'h' ? pointer.x : pointer.y;
+      let off = (cur - this.drag.startPx) / CELL;
       off = clamp(off, this.drag.lo, this.drag.hi);
       this.drag.off = off;
-      this.drag.lastPx = cur;
     }
     if (this.drag && !pointer.down) {
       const snap = Math.round(this.drag.off);
@@ -143,7 +143,6 @@ export class RushHour {
     }
     this.parts.update(dt);
   }
-  axisPx(car) { return car.dir === 'h' ? pointer.x : pointer.y; }
   pickCar(px, py) {
     for (const car of this.cars) {
       const [c, r] = [car.c, car.r];

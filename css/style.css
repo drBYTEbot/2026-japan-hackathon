@@ -23,7 +23,5 @@ body {
   z-index:10; transition:opacity .5s ease;
 }
 #boot.hide { opacity:0; pointer-events:none; }
-#bootlogo { filter: drop-shadow(0 0 24px rgba(123,92,255,0.6)); animation: bob 2.4s ease-in-out infinite; }
 #bootmsg { color:#8b94b8; letter-spacing:2px; font-size:14px; }
-@keyframes bob { 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-8px); } }
 .nojs { color:#ff5d5d; padding:24px; }

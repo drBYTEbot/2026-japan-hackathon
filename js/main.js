@@ -173,19 +173,6 @@ class App {
           ctx.fillRect(wx, wy, 7, 9);
         }
       }
-      // ai& sign on designated building
-      if (b.sign) {
-        const sx = b.x + b.w / 2, sy = by - 24;
-        // sign backing
-        ctx.fillStyle = '#1a1f35'; ctx.fillRect(sx - 28, sy - 4, 56, 22);
-        ctx.strokeStyle = '#ffcf4d'; ctx.lineWidth = 1.5; ctx.strokeRect(sx - 28, sy - 4, 56, 22);
-        // ai& text on sign
-        const w1 = pxText(ctx, 'ai', sx - 16, sy + 1, 2, '#ffffff');
-        pxText(ctx, '&', sx - 16 + w1 + 2, sy + 1, 2, '#ffcf4d');
-        // glow
-        ctx.save(); ctx.globalAlpha = 0.2 + Math.sin(t * 3) * 0.1; ctx.fillStyle = '#ffcf4d';
-        ctx.fillRect(sx - 30, sy - 6, 60, 26); ctx.restore();
-      }
     }
 
     // === window frame (we're inside the office looking out) ===
@@ -348,7 +335,7 @@ class App {
     window.addEventListener('resize', () => this.resize());
     this.last = performance.now();
     const boot = document.getElementById('boot');
-    if (boot) boot.classList.add('hide');
+    if (boot) { boot.classList.add('hide'); setTimeout(() => boot.remove(), 600); }
     requestAnimationFrame(this.loopBound);
   }
   resize() {

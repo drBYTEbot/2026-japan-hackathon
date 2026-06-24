@@ -43,7 +43,7 @@ export class Office {
       { x: 0, y: OY, w: 400, h: wall }, { x: 540, y: OY, w: 420, h: wall },
     ];
     // === CEO office (David's office, top section) ===
-    this.ceoDesk = { x: 360, y: 50, w: 240, h: 70 };
+    this.ceoDesk = { x: 360, y: 80, w: 240, h: 70 };
     this.furn.push({ ...this.ceoDesk, type: 'ceoDesk' });
     // CEO bookshelf
     this.furn.push({ x: 60, y: 50, w: 120, h: 30, type: 'shelf' });

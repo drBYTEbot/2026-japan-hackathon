@@ -268,14 +268,14 @@ export class BossGame {
       if (car) {
         pointer.consumed = true;
         const [lo, hi] = this.rushSlideRange(car);
-        this.rushDrag = { car, lo, hi, off: 0, startC: car.c, startR: car.r, lastPx: car.dir === 'h' ? pointer.x : pointer.y };
+        this.rushDrag = { car, lo, hi, off: 0, startC: car.c, startR: car.r, startPx: car.dir === 'h' ? pointer.x : pointer.y };
       }
     }
     if (this.rushDrag && pointer.down) {
       const cur = this.rushDrag.car.dir === 'h' ? pointer.x : pointer.y;
-      let off = (cur - this.rushDrag.lastPx) / RCELL + this.rushDrag.off;
+      let off = (cur - this.rushDrag.startPx) / RCELL;
       off = clamp(off, this.rushDrag.lo, this.rushDrag.hi);
-      this.rushDrag.off = off; this.rushDrag.lastPx = cur;
+      this.rushDrag.off = off;
     }
     if (this.rushDrag && !pointer.down) {
       const snap = Math.round(this.rushDrag.off);
