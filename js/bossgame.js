@@ -418,7 +418,7 @@ export class BossGame {
   fightActAttack() { this.fightStartAnim(this.player, () => this.fightDamage(this.player, this.boss, randInt(this.player.atk - 4, this.player.atk + 4), false), 'You attack!'); }
   fightActSpecial() { this.player.special.uses--; this.fightStartAnim(this.player, () => this.fightDamage(this.player, this.boss, this.player.special.pow + randInt(-6, 6), true), `CODE BLAST!`); Sfx.heal(); }
   fightActDefend() { this.player.defending = true; this.fightStartAnim(this.player, null, 'You brace for impact!'); }
-  fightActItem() { this.player.potions--; const heal = randInt(60, 80); this.player.hp = clamp(this.player.hp + heal, 0, this.player.maxhp); this.floats.push({ x: this.player.x, y: this.player.y - 30, val: '+' + heal, color: PALETTE.green, life: 1.2 }); this.parts.burst(this.player.x, this.player.y - 20, 16, { color: PALETTE.green, speed: 90, life: 0.7 }); Sfx.heal(); this.fightMsg = `Coffee! +${heal} HP`; this.fightStartAnim(this.player, null, this.fightMsg); }
+  fightActItem() { this.player.potions--; const heal = this.player.maxhp - this.player.hp; this.player.hp = this.player.maxhp; this.floats.push({ x: this.player.x, y: this.player.y - 30, val: '+' + heal, color: PALETTE.green, life: 1.2 }); this.parts.burst(this.player.x, this.player.y - 20, 16, { color: PALETTE.green, speed: 90, life: 0.7 }); Sfx.heal(); this.fightMsg = `FULL HEAL! +${heal} HP`; this.fightStartAnim(this.player, null, this.fightMsg); }
   fightStartAnim(actor, applyFn, msg) {
     this.fightPhase = 'anim';
     this.fightTimer = applyFn ? 0.6 : 0.5;
