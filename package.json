@@ -5,6 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "start": "node serve.js",
     "serve": "node serve.js",
     "check": "node --check js/util.js && node --check js/audio.js && node --check js/characters.js"
   },
