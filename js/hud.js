@@ -1,6 +1,6 @@
 // hud.js — persistent top HUD: ai& brand, animated coin counter, sound toggles, toasts
 import { Store, pxText, pxTextCenter, lerp, clamp, PALETTE, roundRect, strokeRoundRect } from './util.js';
-import { drawLogo, button, W, H } from './ui.js';
+import { button, W, H } from './ui.js';
 import { Audio, Sfx } from './audio.js';
 
 export class HUD {
@@ -39,10 +39,9 @@ export class HUD {
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, 70);
     ctx.restore();
 
-    // ---- brand ----
-    drawLogo(ctx, 14, 12, 40, this.t);
-    pxText(ctx, 'ArcAIdia', 64, 16, 4, PALETTE.ink);
-    pxText(ctx, 'by ai&', 64, 42, 2, PALETTE.dim);
+    // ---- brand (text only, no logo) ----
+    pxText(ctx, 'ArcAIdia', 14, 16, 4, PALETTE.ink);
+    pxText(ctx, 'by ai&', 14, 42, 2, PALETTE.dim);
 
     // ---- coin counter (top-right) ----
     const cw = 168, ch = 38, cx = W - cw - 16, cy = 14;

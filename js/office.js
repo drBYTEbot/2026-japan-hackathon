@@ -119,9 +119,18 @@ export class Office {
     this.player.x = clamp(this.player.x, 30, WORLD_W - 30);
     this.player.y = clamp(this.player.y, 40, WORLD_H - 30);
 
-    // camera follow
+    // camera follow — snap if player is off-screen, otherwise smooth follow
+    const screenY = this.player.y - this.cam.y;
     const targetCam = clamp(this.player.y - H / 2 - 20, 0, WORLD_H - H);
-    this.cam.y = lerp(this.cam.y, targetCam, 1 - Math.pow(0.001, dt));
+    // if player is outside the visible band, snap camera immediately
+    if (screenY < 60 || screenY > H - 80) {
+      this.cam.y = targetCam;
+    } else {
+      this.cam.y = lerp(this.cam.y, targetCam, 1 - Math.pow(0.001, dt));
+    }
+
+    // press R to recenter on player (in case they get lost)
+    if (Input.pressed('r')) { this.cam.y = targetCam; Sfx.click(); }
 
     // ---- platform activation ----
     let onPlat = null;
@@ -276,8 +285,8 @@ export class Office {
     ctx.save();
     ctx.fillStyle = '#e9edf7'; roundRectC(ctx, b.x, b.y, b.w, b.h, 6); ctx.fill();
     ctx.fillStyle = '#d4dae8'; ctx.fillRect(b.x, b.y + b.h - 6, b.w, 6);
-    pxText(ctx, 'ai& ENGINEERING', b.x + 16, b.y + 24, 3, '#2a3050');
-    pxText(ctx, 'WELCOME', b.x + 16, b.y + 48, 2, '#6b7393');
+    pxText(ctx, 'WELCOME', b.x + 16, b.y + 20, 3, '#2a3050');
+    pxText(ctx, 'HAVE A NICE DAY', b.x + 16, b.y + 44, 2, '#6b7393');
     ctx.restore();
   }
   drawPlatform(ctx, p) {
@@ -469,9 +478,33 @@ export class Office {
     if (this.t < 8) {
       const a = clamp((8 - this.t) / 2, 0, 1);
       ctx.save(); ctx.globalAlpha = a;
-      pxTextCenter(ctx, 'WASD / ARROWS TO MOVE    STEP ON A PAD TO PLAY    SPACE TO INTERACT', W / 2, H - 30, 2, 'rgba(255,255,255,0.7)');
+      pxTextCenter(ctx, 'WASD/ARROWS MOVE   SPACE INTERACT   R RECENTER', W / 2, H - 30, 2, 'rgba(255,255,255,0.7)');
       ctx.restore();
     }
+    // off-screen player indicator
+    this.drawOffscreenIndicator(ctx);
+  }
+  drawOffscreenIndicator(ctx) {
+    const sy = this.player.y - this.cam.y;
+    const sx = this.player.x;
+    // player is visible — no indicator needed
+    if (sy > 20 && sy < H - 20 && sx > 20 && sx < W - 20) return;
+    // clamp arrow to screen edge
+    const ay = clamp(sy, 30, H - 30);
+    const ax = clamp(sx, 30, W - 30);
+    const dy = sy < 20 ? -1 : (sy > H - 20 ? 1 : 0);
+    const dx = sx < 20 ? -1 : (sx > W - 20 ? 1 : 0);
+    ctx.save();
+    ctx.translate(ax, ay);
+    if (dy) ctx.rotate(dy > 0 ? Math.PI / 2 : -Math.PI / 2);
+    if (dx < 0 && !dy) ctx.rotate(Math.PI);
+    // pulsing arrow
+    const pulse = 0.7 + Math.sin(this.t * 6) * 0.3;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = PALETTE.gold;
+    ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(10, 4); ctx.lineTo(-10, 4); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 }
 
