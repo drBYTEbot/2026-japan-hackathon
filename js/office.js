@@ -60,7 +60,8 @@ export class Office {
 
     // === Main office (shifted down by OY) ===
     // reception desk (top-left)
-    this.furn.push({ x: 60, y: 70 + OY, w: 150, h: 44, type: 'reception' });
+    this.receptionDesk = { x: 60, y: 70 + OY, w: 150, h: 44, type: 'reception' };
+    this.furn.push(this.receptionDesk);
     // whiteboard with logo (decoration, not collision)
     this.logoBoard = { x: 384, y: 22 + OY, w: 192, h: 70 };
     // engineering desk bays
@@ -221,6 +222,9 @@ export class Office {
     // claw machine proximity
     let nearClaw = false;
     if (px2(this.player, this.claw, 60)) nearClaw = true;
+    // reception desk proximity
+    let nearReception = false;
+    if (px2(this.player, this.receptionDesk, 50)) nearReception = true;
 
     if (this.lockout <= 0) {
       if (onPlat) {
@@ -232,6 +236,11 @@ export class Office {
         this.activePlatform = null;
         if ((Input.pressed(' ') || Input.pressed('enter') || this.clickWorld(this.claw)) && !pointer.consumed) {
           pointer.consumed = true; this.app.openShop();
+        }
+      } else if (nearReception) {
+        this.activePlatform = null;
+        if ((Input.pressed(' ') || Input.pressed('enter') || this.clickWorld(this.receptionDesk)) && !pointer.consumed) {
+          pointer.consumed = true; this.app.openAlbum();
         }
       } else {
         this.activePlatform = null; this.enterTimer = 0; this.enterGame = null;
@@ -745,6 +754,18 @@ export class Office {
       pxText(ctx, p.name, x + 16, y + 14, 3, '#fff');
       pxText(ctx, p.diff + '  +' + p.reward + ' COINS', x + 56, y + 40, 2, p.color);
       pxText(ctx, p.desc, x + 16, y + 64, 2, PALETTE.dim);
+      ctx.restore();
+    }
+    // reception album prompt
+    if (this.lockout <= 0 && px2(this.player, this.receptionDesk, 50)) {
+      const w = 280, h = 44, x = W / 2 - w / 2, y = H - h - 16;
+      ctx.save();
+      ctx.globalAlpha = 0.96;
+      ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 14;
+      ctx.fillStyle = '#11172a'; roundRectC(ctx, x, y, w, h, 10); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = PALETTE.gold; ctx.lineWidth = 2; roundRectC(ctx, x + 1, y + 1, w - 2, h - 2, 9); ctx.stroke();
+      pxTextCenter(ctx, 'STICKER ALBUM — PRESS SPACE', W / 2, y + 14, 2, PALETTE.gold);
       ctx.restore();
     }
     // controls hint (fade after movement)

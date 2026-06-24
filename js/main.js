@@ -1,7 +1,7 @@
 // main.js — ArcAIdia app: state machine, loop, scaling, audio, side shop button
-import { W, H, init, setView, endFrame, button, pointer, Input } from './ui.js';
+import { W, H, init, setView, endFrame, button, pointer, Input, panel } from './ui.js';
 import { clamp, lerp, rand, TAU, PALETTE, pxText, pxTextCenter, updateShake, applyShake, Store, roundRect as roundRectS } from './util.js';
-import { descriptor, drawCharacter, EMPLOYEES } from './characters.js';
+import { descriptor, drawCharacter, EMPLOYEES, SNACKS, drawSticker, drawSnackSticker } from './characters.js';
 import { initAudio, resumeAudio, playMusic, Audio, Sfx } from './audio.js';
 import { HUD, setMusicHook } from './hud.js';
 import { Office, GAMES } from './office.js';
@@ -83,6 +83,57 @@ class App {
   }
   openShop() { this.state = 'shop'; this.scenes.shop.onEnter(); Sfx.door(); }
   closeShop() { this.state = 'office'; this.scenes.office.onEnter(); }
+  openAlbum() { this.state = 'album'; this.albumTab = 'staff'; this.albumPage = 0; Sfx.door(); }
+  closeAlbum() { this.state = 'office'; this.scenes.office.onEnter(); }
+
+  updateAlbum(dt) {
+    this.albumT = (this.albumT || 0) + dt;
+  }
+  drawAlbum(ctx) {
+    // dim backdrop
+    ctx.fillStyle = 'rgba(6,8,16,0.92)'; ctx.fillRect(0, 0, W, H);
+    pxTextCenter(ctx, 'STICKER ALBUM', W / 2, 20, 5, PALETTE.gold);
+    pxTextCenter(ctx, 'View all your collected stickers', W / 2, 56, 2, PALETTE.dim);
+
+    const showStaff = this.albumTab === 'staff';
+    const items = showStaff ? EMPLOYEES : SNACKS;
+    const perPage = 24;
+    const totalPages = Math.ceil(items.length / perPage);
+    const cols = 6, cell = 74;
+    const px = 80, py = 90, pw = W - 160, ph = H - 170;
+
+    panel(ctx, px, py, pw, ph, { r: 14 });
+
+    // tab buttons
+    if (button(ctx, px + 16, py + 8, 100, 24, 'STAFF', { scale: 2, bg: showStaff ? PALETTE.panel2 : PALETTE.panel, border: showStaff ? PALETTE.green : 'rgba(255,255,255,0.08)', fg: showStaff ? PALETTE.green : PALETTE.dim })) {
+      this.albumTab = 'staff'; this.albumPage = 0; Sfx.hover();
+    }
+    if (button(ctx, px + 124, py + 8, 100, 24, 'SNACKS', { scale: 2, bg: !showStaff ? PALETTE.panel2 : PALETTE.panel, border: !showStaff ? PALETTE.accent : 'rgba(255,255,255,0.08)', fg: !showStaff ? PALETTE.accent : PALETTE.dim })) {
+      this.albumTab = 'snack'; this.albumPage = 0; Sfx.hover();
+    }
+
+    const owned = showStaff ? EMPLOYEES.filter(n => Store.owns(n)).length : Store.snacks.filter(n => Store.ownsSnack(n)).length;
+    pxText(ctx, owned + '/' + items.length, px + pw - 70, py + 14, 2, showStaff ? PALETTE.green : PALETTE.accent);
+
+    const gx = px + 16, gy = py + 40;
+    const start = this.albumPage * perPage;
+    for (let i = 0; i < perPage; i++) {
+      const idx = start + i;
+      if (idx >= items.length) break;
+      const cx = gx + (i % cols) * cell, cy = gy + Math.floor(i / cols) * cell;
+      if (cx + cell > px + pw - 12) break;
+      if (showStaff) {
+        drawSticker(ctx, items[idx], cx, cy, cell - 8, this.albumT || 0, { owned: Store.owns(items[idx]) });
+      } else {
+        drawSnackSticker(ctx, items[idx], cx, cy, cell - 8, this.albumT || 0, { owned: Store.ownsSnack(items[idx]) });
+      }
+    }
+    if (button(ctx, px + 16, py + ph - 36, 80, 26, '< PREV', { scale: 2 }) && this.albumPage > 0) { this.albumPage--; Sfx.hover(); }
+    if (button(ctx, px + pw - 96, py + ph - 36, 80, 26, 'NEXT >', { scale: 2 }) && this.albumPage < totalPages - 1) { this.albumPage++; Sfx.hover(); }
+    pxTextCenter(ctx, 'PAGE ' + (this.albumPage + 1) + '/' + totalPages, px + pw / 2, py + ph - 30, 2, PALETTE.dim);
+
+    if (button(ctx, W - 120, H - 52, 104, 36, 'CLOSE', { scale: 2, fg: PALETTE.dim })) { Sfx.click(); this.closeAlbum(); }
+  }
 
   update(dt) {
     this.hud.update(dt);
@@ -98,6 +149,8 @@ class App {
       this.scenes.office.update(dt);
     } else if (this.state === 'shop') {
       this.scenes.shop.update(dt);
+    } else if (this.state === 'album') {
+      this.updateAlbum(dt);
     } else {
       this.scenes[this.state].update(dt);
     }
@@ -112,12 +165,13 @@ class App {
     if (this.state === 'title') this.drawTitle(ctx);
     else {
       const s = this.state === 'shop' ? 'office' : this.state;
-      // draw office behind shop
-      if (this.state === 'shop') { ctx.globalAlpha = 0.25; this.scenes.office.draw(ctx); ctx.globalAlpha = 1; }
+      // draw office behind shop/album
+      if (this.state === 'shop' || this.state === 'album') { ctx.globalAlpha = 0.25; this.scenes.office.draw(ctx); ctx.globalAlpha = 1; }
       else if (this.state === 'office') this.scenes.office.draw(ctx);
       else this.scenes[this.state].draw(ctx);
 
       if (this.state === 'shop') this.scenes.shop.draw(ctx);
+      if (this.state === 'album') this.drawAlbum(ctx);
 
       // side shop button on office
       if (this.state === 'office') this.drawShopButton(ctx);

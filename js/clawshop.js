@@ -28,6 +28,7 @@ export class ClawShop {
     this.vendingMode = Store.allStickersCollected();
     this.vendDispenseY = 0;
     this.vendItem = null;
+    this.collectionTab = 'snack'; // 'snack' or 'staff'
     this.msg = this.vendingMode ? 'Insert coins to win snacks!' : 'Insert coins to win a teammate sticker!';
   }
   makePrizes() {
@@ -308,37 +309,59 @@ export class ClawShop {
     const px = 430, py = 90, pw = 490, ph = 380;
     panel(ctx, px, py, pw, ph, { r: 14 });
     if (this.vendingMode) {
-      pxText(ctx, 'SNACK COLLECTION', px + 16, py + 12, 2, PALETTE.accent);
-      const owned = Store.snacks.filter(n => Store.ownsSnack(n)).length;
-      pxText(ctx, owned + '/' + SNACKS.length, px + pw - 70, py + 12, 2, PALETTE.ink);
-      // also show employee count
-      pxText(ctx, 'STAFF 48/48', px + pw - 180, py + 12, 2, PALETTE.green);
+      // tab buttons to switch between snack and staff collection
+      const tabSnack = this.collectionTab !== 'staff';
+      const tabStaff = this.collectionTab === 'staff';
+      if (button(ctx, px + 16, py + 8, 100, 24, 'SNACKS', { scale: 2, bg: tabSnack ? PALETTE.panel2 : PALETTE.panel, border: tabSnack ? PALETTE.accent : 'rgba(255,255,255,0.08)', fg: tabSnack ? PALETTE.accent : PALETTE.dim })) {
+        this.collectionTab = 'snack'; Sfx.hover();
+      }
+      if (button(ctx, px + 124, py + 8, 100, 24, 'STAFF', { scale: 2, bg: tabStaff ? PALETTE.panel2 : PALETTE.panel, border: tabStaff ? PALETTE.green : 'rgba(255,255,255,0.08)', fg: tabStaff ? PALETTE.green : PALETTE.dim })) {
+        this.collectionTab = 'staff'; Sfx.hover();
+      }
+      const showStaff = this.collectionTab === 'staff';
+      const items = showStaff ? EMPLOYEES : SNACKS;
+      const owned = showStaff ? EMPLOYEES.filter(n => Store.owns(n)).length : Store.snacks.filter(n => Store.ownsSnack(n)).length;
+      pxText(ctx, owned + '/' + items.length, px + pw - 70, py + 14, 2, showStaff ? PALETTE.green : PALETTE.accent);
+
+      const cols = 6, cell = 74;
+      const gx = px + 16, gy = py + 40;
+      const start = this.page * this.perPage;
+      for (let i = 0; i < this.perPage; i++) {
+        const idx = start + i;
+        if (idx >= items.length) break;
+        const cx = gx + (i % cols) * cell, cy = gy + Math.floor(i / cols) * cell;
+        if (cx + cell > px + pw - 12) break;
+        if (showStaff) {
+          drawSticker(ctx, items[idx], cx, cy, cell - 8, this.t, { owned: Store.owns(items[idx]) });
+        } else {
+          drawSnackSticker(ctx, items[idx], cx, cy, cell - 8, this.t, { owned: Store.ownsSnack(items[idx]) });
+        }
+      }
+      const totalPages = Math.ceil(items.length / this.perPage);
+      if (button(ctx, px + 16, py + ph - 36, 80, 26, '< PREV', { scale: 2 }) && this.page > 0) { this.page--; Sfx.hover(); }
+      if (button(ctx, px + pw - 96, py + ph - 36, 80, 26, 'NEXT >', { scale: 2 }) && this.page < totalPages - 1) { this.page++; Sfx.hover(); }
+      pxTextCenter(ctx, 'PAGE ' + (this.page + 1) + '/' + totalPages, px + pw / 2, py + ph - 30, 2, PALETTE.dim);
     } else {
       pxText(ctx, 'STICKER COLLECTION', px + 16, py + 12, 2, PALETTE.gold);
       const owned = EMPLOYEES.filter(n => Store.owns(n)).length;
       pxText(ctx, owned + '/' + EMPLOYEES.length, px + pw - 70, py + 12, 2, PALETTE.ink);
-    }
 
-    const cols = 6, cell = 74;
-    const gx = px + 16, gy = py + 40;
-    const start = this.page * this.perPage;
-    const items = this.vendingMode ? SNACKS : EMPLOYEES;
-    for (let i = 0; i < this.perPage; i++) {
-      const idx = start + i;
-      if (idx >= items.length) break;
-      const cx = gx + (i % cols) * cell, cy = gy + Math.floor(i / cols) * cell;
-      if (cx + cell > px + pw - 12) break;
-      if (this.vendingMode) {
-        drawSnackSticker(ctx, items[idx], cx, cy, cell - 8, this.t, { owned: Store.ownsSnack(items[idx]) });
-      } else {
+      const cols = 6, cell = 74;
+      const gx = px + 16, gy = py + 40;
+      const start = this.page * this.perPage;
+      const items = EMPLOYEES;
+      for (let i = 0; i < this.perPage; i++) {
+        const idx = start + i;
+        if (idx >= items.length) break;
+        const cx = gx + (i % cols) * cell, cy = gy + Math.floor(i / cols) * cell;
+        if (cx + cell > px + pw - 12) break;
         drawSticker(ctx, items[idx], cx, cy, cell - 8, this.t, { owned: Store.owns(items[idx]) });
       }
+      const totalPages = Math.ceil(items.length / this.perPage);
+      if (button(ctx, px + 16, py + ph - 36, 80, 26, '< PREV', { scale: 2 }) && this.page > 0) { this.page--; Sfx.hover(); }
+      if (button(ctx, px + pw - 96, py + ph - 36, 80, 26, 'NEXT >', { scale: 2 }) && this.page < totalPages - 1) { this.page++; Sfx.hover(); }
+      pxTextCenter(ctx, 'PAGE ' + (this.page + 1) + '/' + totalPages, px + pw / 2, py + ph - 30, 2, PALETTE.dim);
     }
-    // page nav
-    const totalPages = Math.ceil(items.length / this.perPage);
-    if (button(ctx, px + 16, py + ph - 36, 80, 26, '< PREV', { scale: 2 }) && this.page > 0) { this.page--; Sfx.hover(); }
-    if (button(ctx, px + pw - 96, py + ph - 36, 80, 26, 'NEXT >', { scale: 2 }) && this.page < totalPages - 1) { this.page++; Sfx.hover(); }
-    pxTextCenter(ctx, 'PAGE ' + (this.page + 1) + '/' + totalPages, px + pw / 2, py + ph - 30, 2, PALETTE.dim);
   }
   drawReveal(ctx) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H);
