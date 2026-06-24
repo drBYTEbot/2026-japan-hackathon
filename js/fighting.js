@@ -1,22 +1,129 @@
-// fighting.js — PIXEL BRAWL (Hard, 50 coins). 8-bit turn-based RPG, 3 floors.
+// fighting.js — PIXEL BRAWL (Hard, 20 coins). 8-bit turn-based RPG, 3 floors.
 import { clamp, lerp, randInt, choice, chance, mulberry32, hashStr, TAU, PALETTE, Particles, pxText, pxTextCenter, addShake, fillRoundRect, strokeRoundRect } from './util.js';
 import { W, H, Input, button, panel, bar, hover, pointer, consumeClick } from './ui.js';
 import { drawCharacter, descriptor, EMPLOYEES, drawSticker } from './characters.js';
 import { Sfx } from './audio.js';
 
-const SPECIALS = ['CODE BLAST', 'COFFEE RUSH', 'BUG SWARM', 'OVERDRIVE', 'DEPLOY', 'REFACTOR'];
+// ---- Role definitions: each role has unique special abilities ----
+// type: 'damage' (hurts enemy), 'heal' (heals party), 'buff' (boosts attack)
+const ROLES = {
+  engineer: {
+    label: 'ENGINEER',
+    color: '#43d17a',
+    skills: [
+      { name: 'CODE BLAST', type: 'damage', pow: 70, uses: 3, desc: 'Devastating code strike' },
+      { name: 'BUG SWARM', type: 'damage', pow: 40, uses: 3, hits: 2, desc: 'Hits twice' },
+      { name: 'DEPLOY', type: 'damage', pow: 90, uses: 2, desc: 'Massive deploy damage' },
+    ],
+    baseStats: { hp: 120, atk: 24, def: 12, spd: 10 },
+  },
+  marketing: {
+    label: 'MARKETING',
+    color: '#e2a35c',
+    skills: [
+      { name: 'VIRAL POST', type: 'damage', pow: 55, uses: 3, desc: 'Spreads like wildfire' },
+      { name: 'BRAND STORM', type: 'damage', pow: 80, uses: 2, desc: 'Overwhelming campaign' },
+      { name: 'HYPE BOOST', type: 'buff', pow: 15, uses: 2, desc: '+15 ATK to whole party' },
+    ],
+    baseStats: { hp: 100, atk: 20, def: 9, spd: 12 },
+  },
+  hr: {
+    label: 'HR',
+    color: '#5ce2cf',
+    skills: [
+      { name: 'TEAM RETREAT', type: 'heal', pow: 100, uses: 2, desc: 'Full heal all party' },
+      { name: 'WELLNESS', type: 'heal', pow: 60, uses: 3, desc: 'Heal all party 60HP' },
+      { name: 'FEEDBACK', type: 'damage', pow: 45, uses: 2, desc: 'Constructive criticism' },
+    ],
+    baseStats: { hp: 110, atk: 16, def: 14, spd: 9 },
+  },
+  intern: {
+    label: 'INTERN',
+    color: '#5db8ff',
+    skills: [
+      { name: 'ALL-NIGHTER', type: 'damage', pow: 50, uses: 3, desc: 'Caffeine-fueled fury' },
+      { name: 'COFFEE RUN', type: 'heal', pow: 80, uses: 2, desc: 'Heal all party 80HP' },
+      { name: 'EAGER LEARN', type: 'buff', pow: 20, uses: 1, desc: '+20 ATK to whole party' },
+    ],
+    baseStats: { hp: 80, atk: 18, def: 8, spd: 14 },
+  },
+  ceo: {
+    label: 'CEO',
+    color: '#ffd23f',
+    skills: [
+      { name: 'LAYOFF', type: 'damage', pow: 100, uses: 2, desc: 'Devastating executive order' },
+      { name: 'VISION', type: 'buff', pow: 25, uses: 1, desc: '+25 ATK to whole party' },
+      { name: 'BONUS', type: 'heal', pow: 120, uses: 1, desc: 'Full heal all party' },
+    ],
+    baseStats: { hp: 150, atk: 28, def: 16, spd: 8 },
+  },
+  designer: {
+    label: 'DESIGNER',
+    color: '#b07bff',
+    skills: [
+      { name: 'PIXEL STORM', type: 'damage', pow: 60, uses: 3, desc: 'Barrage of pixels' },
+      { name: 'REFRESH', type: 'heal', pow: 70, uses: 2, desc: 'Heal all party 70HP' },
+      { name: 'POLISH', type: 'buff', pow: 18, uses: 2, desc: '+18 ATK to whole party' },
+    ],
+    baseStats: { hp: 95, atk: 19, def: 10, spd: 13 },
+  },
+  sales: {
+    label: 'SALES',
+    color: '#e25c5c',
+    skills: [
+      { name: 'COLD CALL', type: 'damage', pow: 65, uses: 3, desc: 'Relentless pitch' },
+      { name: 'BIG DEAL', type: 'damage', pow: 85, uses: 2, desc: 'Closes the deal hard' },
+      { name: 'COMMISSION', type: 'heal', pow: 90, uses: 2, desc: 'Heal all party 90HP' },
+    ],
+    baseStats: { hp: 105, atk: 22, def: 11, spd: 11 },
+  },
+  data: {
+    label: 'DATA SCI',
+    color: '#3aa6c9',
+    skills: [
+      { name: 'ML MODEL', type: 'damage', pow: 75, uses: 2, desc: 'AI-powered strike' },
+      { name: 'INSIGHT', type: 'buff', pow: 22, uses: 2, desc: '+22 ATK to whole party' },
+      { name: 'ANALYTICS', type: 'damage', pow: 50, uses: 3, desc: 'Data-driven damage' },
+    ],
+    baseStats: { hp: 100, atk: 21, def: 10, spd: 12 },
+  },
+};
+
+// Per-employee role assignments
+const EMPLOYEE_ROLES = {
+  'Saria': 'engineer', 'Feifan': 'engineer', 'Noah': 'engineer', 'Shimpei': 'engineer',
+  'Misaki': 'engineer', 'Shinon': 'engineer', 'Yushi': 'engineer', 'Takanori': 'engineer',
+  'Takeru': 'engineer', 'Satoshi': 'engineer', 'Hirokazu': 'engineer', 'Hiroyuki': 'engineer',
+  'Akimitsu': 'engineer', 'Yuhei': 'engineer', 'Kazunori': 'data',
+  'Noa': 'designer', 'Hana': 'designer', 'Sakuarko': 'designer', 'Ayuki': 'designer',
+  'David': 'ceo',
+  'Richard': 'marketing', 'Amelia': 'marketing', 'Sophia': 'marketing', 'Samantha': 'marketing',
+  'Mike': 'sales', 'Matt': 'sales', 'Alex': 'sales', 'John': 'sales', 'Steven': 'sales', 'Matthew': 'sales',
+  'Rajendra': 'data', 'Sumer': 'data', 'Mustafa': 'data', 'Yagiz': 'data',
+  'Atul Anand': 'engineer', 'Lamu': 'hr', 'Millan': 'hr', 'Mao': 'hr',
+  'Mario': 'sales', 'Masamichi': 'engineer', 'Nao': 'designer',
+  'Tetsuya': 'engineer', 'Mutsumi': 'hr', 'Yu': 'intern', 'Uchida': 'intern',
+  'Obama': 'intern', 'Jun': 'intern', 'Ryuei': 'intern', 'Shearin': 'intern',
+};
+
+export function roleFor(name) {
+  return EMPLOYEE_ROLES[name] || 'engineer';
+}
+
 const POTIONS = 2;
 
 function statsFor(name) {
   const d = descriptor(name);
+  const role = roleFor(name);
+  const base = ROLES[role].baseStats;
   const rng = mulberry32(hashStr(name + '#stats'));
   return {
-    name, desc: d,
-    maxhp: 90 + Math.floor(rng() * 60),
-    atk: 16 + Math.floor(rng() * 14),
-    def: 7 + Math.floor(rng() * 10),
-    spd: 8 + Math.floor(rng() * 12),
-    special: { name: choice(SPECIALS), max: 3, uses: 3, pow: 30 + Math.floor(rng() * 24) },
+    name, desc: d, role, roleLabel: ROLES[role].label, roleColor: ROLES[role].color,
+    maxhp: base.hp + Math.floor(rng() * 30),
+    atk: base.atk + Math.floor(rng() * 8),
+    def: base.def + Math.floor(rng() * 6),
+    spd: base.spd + Math.floor(rng() * 8),
+    chosenSkill: null, // set during skill selection
     potions: POTIONS,
   };
 }
@@ -37,14 +144,18 @@ export class Fighting {
   onEnter() {
     this.t = 0;
     this.phase = 'select';
-    this.party = [];           // chosen unit refs
-    this.selectIdx = 0;        // highlight in roster
+    this.party = [];           // chosen names
+    this.partySkills = [];     // chosen skill index per party member
+    this.selectIdx = 0;
+    this.skillSelectIdx = 0;   // which party member is choosing a skill
+    this.skillCursor = 0;      // cursor in the skill list
     this.level = 0;
-    this.msg = 'Form your party of 3.';
+    this.msg = 'Pick 3 team members';
     this.floats = [];
     this.done = false; this.endTimer = 0;
     this.roster = this.pickRoster();
     this.rosterDesc = this.roster.map(n => descriptor(n));
+    this.rosterRoles = this.roster.map(n => roleFor(n));
   }
   pickRoster() {
     // deterministic-ish shuffle of a chunk of employees for variety
@@ -84,6 +195,7 @@ export class Fighting {
     if (this.done) { this.endTimer += dt; return; }
 
     if (this.phase === 'select') { this.updateSelect(dt); return; }
+    if (this.phase === 'skillselect') { this.updateSkillSelect(dt); return; }
     if (this.phase === 'intro') {
       this.timer -= dt;
       if (this.timer <= 0) this.advanceTurn();
@@ -117,10 +229,42 @@ export class Fighting {
     if (Input.pressed('arrowup') || Input.pressed('w')) { this.selectIdx = (this.selectIdx + 6) % 9; Sfx.hover(); }
     if (Input.pressed('arrowdown') || Input.pressed('s')) { this.selectIdx = (this.selectIdx + 3) % 9; Sfx.hover(); }
     if (Input.pressed(' ')) this.togglePick(this.selectIdx);
-    if (Input.pressed('enter') && this.party.length === 3) this.beginBattle();
+    if (Input.pressed('enter') && this.party.length === 3) {
+      this.phase = 'skillselect';
+      this.skillSelectIdx = 0;
+      this.skillCursor = 0;
+      this.msg = 'Choose special skills for your team';
+      Sfx.select();
+    }
+  }
+  // ---------- skill select ----------
+  updateSkillSelect(dt) {
+    const name = this.party[this.skillSelectIdx];
+    const role = roleFor(name);
+    const skills = ROLES[role].skills;
+    const numSkills = skills.length;
+    if (Input.pressed('arrowleft') || Input.pressed('a')) { this.skillCursor = (this.skillCursor + numSkills - 1) % numSkills; Sfx.hover(); }
+    if (Input.pressed('arrowright') || Input.pressed('d')) { this.skillCursor = (this.skillCursor + 1) % numSkills; Sfx.hover(); }
+    if (Input.pressed('arrowup') || Input.pressed('w')) { this.skillCursor = (this.skillCursor + numSkills - 1) % numSkills; Sfx.hover(); }
+    if (Input.pressed('arrowdown') || Input.pressed('s')) { this.skillCursor = (this.skillCursor + 1) % numSkills; Sfx.hover(); }
+    if (Input.pressed('enter') || Input.pressed(' ')) {
+      this.partySkills[this.skillSelectIdx] = this.skillCursor;
+      Sfx.select();
+      this.skillSelectIdx++;
+      this.skillCursor = 0;
+      if (this.skillSelectIdx >= 3) {
+        this.beginBattle();
+      }
+    }
   }
   beginBattle() {
-    this.party = this.party.map(n => ({ ...statsFor(n), side: 'party', hp: 0, defending: false, dead: false, flash: 0 }));
+    this.party = this.party.map((n, i) => {
+      const s = statsFor(n);
+      s.chosenSkill = ROLES[s.role].skills[this.partySkills[i] || 0];
+      s.side = 'party'; s.hp = 0; s.defending = false; s.dead = false; s.flash = 0;
+      s.buffAtk = 0; // attack buff from special
+      return s;
+    });
     this.party.forEach(u => u.hp = u.maxhp);
     this.startBattle(); Sfx.door();
   }
@@ -144,9 +288,10 @@ export class Fighting {
     if (Input.pressed('enter') || Input.pressed(' ')) this.choose(this.cursor);
   }
   commands(u) {
+    const skill = u.chosenSkill;
     return [
       { label: 'ATTACK', run: () => this.actAttack(u) },
-      { label: 'SPECIAL', sub: `${u.special.uses}/${u.special.max}`, disabled: u.special.uses <= 0, run: () => this.actSpecial(u) },
+      { label: skill.name, sub: `${skill.uses}/${skill.max}`, disabled: skill.uses <= 0, run: () => this.actSpecial(u) },
       { label: 'DEFEND', run: () => this.actDefend(u) },
       { label: `ITEM x${u.potions}`, disabled: u.potions <= 0, run: () => this.actItem(u) },
     ];
@@ -158,8 +303,48 @@ export class Fighting {
     Sfx.click();
     c.run();
   }
-  actAttack(u) { this.startAnim(u, () => this.damage(u, this.enemy, randInt(u.atk - 4, u.atk + 4), false), `${u.name} attacks!`); }
-  actSpecial(u) { u.special.uses--; this.startAnim(u, () => this.damage(u, this.enemy, u.special.pow + randInt(-6, 6), true), `${u.name} uses ${u.special.name}!`); Sfx.heal(); }
+  actAttack(u) {
+    const atk = u.atk + (u.buffAtk || 0);
+    this.startAnim(u, () => this.damage(u, this.enemy, randInt(atk - 4, atk + 4), false), `${u.name} attacks!`);
+  }
+  actSpecial(u) {
+    const skill = u.chosenSkill;
+    skill.uses--;
+    if (skill.type === 'damage') {
+      const hits = skill.hits || 1;
+      const totalMsg = hits > 1 ? `${u.name} uses ${skill.name}! x${hits}` : `${u.name} uses ${skill.name}!`;
+      this.startAnim(u, () => {
+        for (let h = 0; h < hits; h++) {
+          setTimeout(() => { if (!this.enemy.dead) this.damage(u, this.enemy, skill.pow + randInt(-6, 6), true); }, h * 200);
+        }
+      }, totalMsg);
+      Sfx.attack();
+    } else if (skill.type === 'heal') {
+      this.startAnim(u, () => {
+        const heal = skill.pow;
+        for (const p of this.party) {
+          if (!p.dead) {
+            const actual = Math.min(heal, p.maxhp - p.hp);
+            p.hp = clamp(p.hp + heal, 0, p.maxhp);
+            this.floats.push({ x: p.x, y: p.y - 30, val: '+' + actual, color: PALETTE.green, life: 1.2 });
+            this.parts.burst(p.x, p.y - 20, 12, { color: PALETTE.green, speed: 80, life: 0.6 });
+          }
+        }
+      }, `${u.name} uses ${skill.name}! Party healed!`);
+      Sfx.heal();
+    } else if (skill.type === 'buff') {
+      this.startAnim(u, () => {
+        for (const p of this.party) {
+          if (!p.dead) {
+            p.buffAtk = (p.buffAtk || 0) + skill.pow;
+            this.floats.push({ x: p.x, y: p.y - 30, val: '+ATK', color: PALETTE.gold, life: 1.2 });
+            this.parts.burst(p.x, p.y - 20, 10, { color: PALETTE.gold, speed: 80, life: 0.6 });
+          }
+        }
+      }, `${u.name} uses ${skill.name}! +${skill.pow} ATK to all!`);
+      Sfx.select();
+    }
+  }
   actDefend(u) { u.defending = true; this.msg = `${u.name} braces!`; this.startAnim(u, null, `${u.name} braces for impact!`); }
   actItem(u) { u.potions--; const heal = randInt(50, 70); u.hp = clamp(u.hp + heal, 0, u.maxhp); this.floats.push({ x: u.x, y: u.y - 30, val: '+' + heal, color: PALETTE.green, life: 1.2 }); this.parts.burst(u.x, u.y - 20, 16, { color: PALETTE.green, speed: 90, life: 0.7 }); Sfx.heal(); this.msg = `${u.name} drinks coffee! +${heal} HP`; this.startAnim(u, null, this.msg); }
 
@@ -237,6 +422,7 @@ export class Fighting {
   draw(ctx) {
     ctx.fillStyle = '#05060d'; ctx.fillRect(0, 0, W, H);
     if (this.phase === 'select') { this.drawSelect(ctx); return; }
+    if (this.phase === 'skillselect') { this.drawSkillSelect(ctx); return; }
     this.drawBattlefield(ctx);
     this.drawMenu(ctx);
     if (this.done) this.drawEnd(ctx);
@@ -252,22 +438,89 @@ export class Fighting {
       const name = this.roster[i];
       const picked = this.party.includes(name);
       const sel = i === this.selectIdx;
+      const role = this.rosterRoles[i];
+      const roleColor = ROLES[role].color;
       const rx = cx + 5, ry = cy + 5, rw = cellW - 10, rh = cellH - 10;
       const hov = hover(rx, ry, rw, rh);
       if (hov && pointer.clicked && !pointer.consumed) { consumeClick(); this.togglePick(i); }
-      const border = picked ? PALETTE.green + 'aa' : (sel || hov ? PALETTE.gold : 'rgba(255,255,255,0.08)');
+      const border = picked ? PALETTE.green + 'aa' : (sel || hov ? roleColor : 'rgba(255,255,255,0.08)');
       const bg = picked ? '#16331f' : '#141a2e';
       fillRoundRect(ctx, rx, ry, rw, rh, 8, bg);
       strokeRoundRect(ctx, rx + 0.5, ry + 0.5, rw - 1, rh - 1, 8, 2, border);
       drawCharacter(ctx, cx + cellW / 2, cy + 22, 3, this.rosterDesc[i], { t: this.t });
+      // role label
+      pxTextCenter(ctx, ROLES[role].label, cx + cellW / 2, cy + 10, 1, roleColor);
       const fs = Math.max(1, Math.floor((cellW - 16) / Math.max(name.length, 8) / 6));
       pxTextCenter(ctx, name, cx + cellW / 2, cy + cellH - 22, fs, picked ? PALETTE.green : PALETTE.ink);
-      if (picked) pxTextCenter(ctx, '[OK]', cx + cellW / 2, cy + 12, 2, PALETTE.green);
+      if (picked) pxTextCenter(ctx, '[OK]', cx + cellW / 2, cy + cellH - 36, 2, PALETTE.green);
     }
     const ready = this.party.length === 3;
-    if (button(ctx, W / 2 - 120, H - 62, 240, 40, ready ? 'ENTER THE BRAWL' : `PICK 3 (${this.party.length}/3)`, { scale: 2, fg: ready ? PALETTE.gold : PALETTE.dim, bg: ready ? PALETTE.panel2 : PALETTE.panel, border: ready ? PALETTE.gold : 'rgba(255,255,255,0.08)' })) {
-      if (ready) this.beginBattle();
+    if (button(ctx, W / 2 - 120, H - 62, 240, 40, ready ? 'CHOOSE SKILLS' : `PICK 3 (${this.party.length}/3)`, { scale: 2, fg: ready ? PALETTE.gold : PALETTE.dim, bg: ready ? PALETTE.panel2 : PALETTE.panel, border: ready ? PALETTE.gold : 'rgba(255,255,255,0.08)' })) {
+      if (ready) {
+        this.phase = 'skillselect'; this.skillSelectIdx = 0; this.skillCursor = 0;
+        this.msg = 'Choose special skills for your team'; Sfx.select();
+      }
     }
+  }
+  drawSkillSelect(ctx) {
+    ctx.fillStyle = '#0a0e1c'; ctx.fillRect(0, 0, W, H);
+    pxTextCenter(ctx, 'CHOOSE SPECIAL SKILL', W / 2, 16, 4, PALETTE.gold);
+    pxTextCenter(ctx, `Member ${this.skillSelectIdx + 1} of 3`, W / 2, 52, 2, PALETTE.dim);
+    const name = this.party[this.skillSelectIdx];
+    const role = roleFor(name);
+    const skills = ROLES[role].skills;
+    const desc = descriptor(name);
+
+    // Draw the current character preview (left side)
+    drawCharacter(ctx, 160, 120, 5, desc, { t: this.t });
+    pxTextCenter(ctx, name, 160, 230, 3, PALETTE.ink);
+    pxTextCenter(ctx, ROLES[role].label, 160, 258, 2, ROLES[role].color);
+    // base stats
+    const base = ROLES[role].baseStats;
+    pxText(ctx, 'HP  ' + (base.hp), 80, 280, 2, PALETTE.green);
+    pxText(ctx, 'ATK ' + (base.atk), 80, 300, 2, PALETTE.red);
+    pxText(ctx, 'DEF ' + (base.def), 80, 320, 2, PALETTE.blue);
+    pxText(ctx, 'SPD ' + (base.spd), 80, 340, 2, PALETTE.gold);
+
+    // Skill list (right side)
+    const listX = 340, listY = 100;
+    for (let i = 0; i < skills.length; i++) {
+      const sk = skills[i];
+      const sy = listY + i * 130;
+      const sel = i === this.skillCursor;
+      const rx = listX, ry = sy, rw = 560, rh = 116;
+      const hov = hover(rx, ry, rw, rh);
+      if (hov && pointer.clicked && !pointer.consumed) {
+        consumeClick();
+        this.skillCursor = i;
+        this.partySkills[this.skillSelectIdx] = i;
+        Sfx.select();
+        this.skillSelectIdx++;
+        this.skillCursor = 0;
+        if (this.skillSelectIdx >= 3) { this.beginBattle(); return; }
+      }
+      const typeColor = sk.type === 'heal' ? PALETTE.green : (sk.type === 'buff' ? PALETTE.gold : PALETTE.red);
+      const border = sel || hov ? typeColor : 'rgba(255,255,255,0.08)';
+      fillRoundRect(ctx, rx, ry, rw, rh, 8, sel ? PALETTE.panel2 : PALETTE.panel);
+      strokeRoundRect(ctx, rx + 0.5, ry + 0.5, rw - 1, rh - 1, 8, 2, border);
+      pxText(ctx, sk.name, rx + 16, ry + 12, 3, sel ? typeColor : PALETTE.ink);
+      pxText(ctx, sk.type.toUpperCase() + (sk.hits ? ' x' + sk.hits : ''), rx + 16, ry + 40, 2, typeColor);
+      pxText(ctx, sk.desc, rx + 16, ry + 62, 2, PALETTE.dim);
+      pxText(ctx, 'POW ' + sk.pow, rx + 16, ry + 84, 2, PALETTE.ink);
+      pxText(ctx, 'USES ' + sk.uses, rx + 120, ry + 84, 2, PALETTE.ink);
+      if (sel) pxText(ctx, '>', rx - 16, ry + 12, 3, typeColor);
+    }
+
+    // Already chosen skills (bottom)
+    pxText(ctx, 'TEAM:', 16, H - 56, 2, PALETTE.dim);
+    for (let i = 0; i < this.skillSelectIdx; i++) {
+      const pn = this.party[i];
+      const sk = ROLES[roleFor(pn)].skills[this.partySkills[i]];
+      pxText(ctx, pn + ': ' + sk.name, 80 + (i % 3) * 240, H - 56, 1, PALETTE.green);
+    }
+
+    // Hint
+    pxTextCenter(ctx, 'ARROWS: navigate   ENTER/SPACE: select', W / 2, H - 24, 1, PALETTE.dim);
   }
   drawBattlefield(ctx) {
     // floor
@@ -310,6 +563,7 @@ export class Fighting {
       pxText(ctx, p.name.slice(0, 8), x + 8, y + 4, 2, p.dead ? PALETTE.dim : PALETTE.ink);
       bar(ctx, x + 90, y + 9, 130, 8, p.hp / p.maxhp, p.dead ? '#444' : PALETTE.green);
       pxText(ctx, Math.ceil(p.hp) + '/' + p.maxhp, x + 90, y + 16, 1, PALETTE.dim);
+      if (p.buffAtk > 0 && !p.dead) pxText(ctx, '+' + p.buffAtk + 'ATK', x + 190, y + 4, 1, PALETTE.gold);
     }
     // message line
     panel(ctx, 16, H - 150, W - 32, 44, { r: 8 });
@@ -337,6 +591,8 @@ export class Fighting {
     ctx.translate(dx, 0);
     ctx.globalAlpha = p.flash > 0 ? (0.5 + Math.sin(this.t * 40) * 0.5) : 1;
     drawCharacter(ctx, p.x, p.y - 44, 3, p.desc, { t: this.t, face: 'fight', flip: false });
+    // role label under character
+    if (p.roleLabel) pxTextCenter(ctx, p.roleLabel, p.x, p.y + 12, 1, p.roleColor || PALETTE.dim);
     ctx.restore();
   }
   drawEnemy(ctx) {
@@ -396,7 +652,7 @@ export class Fighting {
       }
       if (cmds[i].sub) pxText(ctx, cmds[i].sub, cx + bw - 48, cy + 8, 2, PALETTE.dim);
     }
-    pxTextCenter(ctx, u.name + "'s TURN", W / 2, H - 156, 2, PALETTE.gold);
+    pxTextCenter(ctx, u.name + " — " + u.roleLabel, W / 2, H - 156, 2, u.roleColor || PALETTE.gold);
   }
   drawEnd(ctx) {
     ctx.fillStyle = 'rgba(2,3,8,0.7)'; ctx.fillRect(0, 0, W, H);
