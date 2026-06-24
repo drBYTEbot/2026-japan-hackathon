@@ -1,7 +1,7 @@
 // office.js — the main hub: an ai& office with 3 game platforms, claw machine, spawn point
 import { clamp, lerp, rand, TAU, PALETTE, Particles, pxText, pxTextCenter, dist, roundRect as roundRectC, Store } from './util.js';
 import { W, H, Input, button, pointer, hover } from './ui.js';
-import { drawCharacter, descriptor, EMPLOYEES } from './characters.js';
+import { drawCharacter, descriptor, EMPLOYEES, SNACKS, drawSnack } from './characters.js';
 import { Sfx } from './audio.js';
 
 export const WORLD_W = 960, WORLD_H = 1000;
@@ -84,6 +84,11 @@ export class Office {
     this.furn.push({ x: 770, y: 470 + OY, w: 120, h: 30, type: 'shelf' });
     // coffee machine
     this.furn.push({ x: 600, y: 470 + OY, w: 40, h: 34, type: 'coffee' });
+    // standalone trash cans around office (visible when snacks unlocked)
+    this.furn.push({ x: 200, y: 510 + OY, w: 12, h: 18, type: 'trashcan' });
+    this.furn.push({ x: 700, y: 510 + OY, w: 12, h: 18, type: 'trashcan' });
+    this.furn.push({ x: 480, y: 400 + OY, w: 12, h: 18, type: 'trashcan' });
+    this.furn.push({ x: 480, y: 600 + OY, w: 12, h: 18, type: 'trashcan' });
     // claw machine (top-right corner of main office)
     this.claw = { x: 820, y: 90 + OY, w: 80, h: 64 };
     // platforms (bottom row)
@@ -508,6 +513,7 @@ export class Office {
       case 'couch': this.couch(ctx, f); break;
       case 'shelf': this.shelf(ctx, f); break;
       case 'coffee': this.coffee(ctx, f); break;
+      case 'trashcan': this.standaloneTrashCan(ctx, f); break;
       case 'claw': this.clawMachine(ctx, f); break;
     }
     ctx.restore();
@@ -528,6 +534,12 @@ export class Office {
     pxText(ctx, 'DAVID', f.x + 14, f.y + 11, 1, '#2a1f3a');
     // coffee mug
     ctx.fillStyle = '#e25c5c'; ctx.fillRect(f.x + f.w - 24, f.y - 8, 14, 12);
+    // fancy bento on CEO desk (when snacks unlocked)
+    if (Store.snacks.length > 0) {
+      ctx.save(); ctx.globalAlpha = 0.7;
+      drawSnack(ctx, 'Bento Box', f.x + f.w - 50, f.y + 4, 8, this.t);
+      ctx.restore();
+    }
     // chair behind desk
     ctx.fillStyle = '#2a1f3a'; roundRectC(ctx, f.x + f.w / 2 - 20, f.y + f.h + 4, 40, 30, 6); ctx.fill();
     ctx.fillStyle = '#1a1525'; ctx.fillRect(f.x + f.w / 2 - 20, f.y + f.h + 4, 40, 8);
@@ -543,6 +555,76 @@ export class Office {
     ctx.fillStyle = '#1a2030'; ctx.fillRect(f.x + f.w / 2 - 6, f.y + 8, 12, 4); // keyboard
     // chair
     ctx.fillStyle = '#2a2f44'; roundRectC(ctx, f.x + f.w / 2 - 10, f.y + f.h + 4, 20, 12, 4); ctx.fill();
+    // food packages on desk (when snacks unlocked)
+    this.drawDeskFood(ctx, f);
+    // trash can by desk (fills with more snacks)
+    this.drawTrashCan(ctx, f);
+  }
+  drawDeskFood(ctx, f) {
+    const snackCount = Store.snacks.length;
+    if (snackCount === 0) return;
+    const items = Math.min(3, Math.ceil(snackCount / 16));
+    const seed = Math.floor(f.x * 0.1 + f.y * 0.07);
+    for (let i = 0; i < items; i++) {
+      const snackName = SNACKS[(seed + i * 7) % SNACKS.length];
+      const fx = f.x + f.w - 12 - i * 16;
+      const fy = f.y + 4;
+      ctx.fillStyle = ['#e25c5c', '#43d17a', '#ffd23f'][i % 3];
+      ctx.fillRect(fx - 5, fy, 10, 8);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillRect(fx - 4, fy + 1, 8, 2);
+      ctx.save(); ctx.globalAlpha = 0.7;
+      drawSnack(ctx, snackName, fx, fy - 4, 5, this.t);
+      ctx.restore();
+    }
+  }
+  drawTrashCan(ctx, f) {
+    const snackCount = Store.snacks.length;
+    if (snackCount === 0) return;
+    const tx = f.x - 14, ty = f.y + f.h - 16;
+    ctx.fillStyle = '#3a3f4e'; ctx.fillRect(tx, ty, 10, 16);
+    ctx.fillStyle = '#2a2f3e'; ctx.fillRect(tx, ty, 10, 3);
+    ctx.fillStyle = '#4a4f5e'; ctx.fillRect(tx + 1, ty + 4, 8, 1);
+    const fillRatio = Math.min(1, snackCount / 48);
+    const fillH = Math.floor(fillRatio * 12);
+    if (fillH > 0) {
+      const colors = ['#e25c5c', '#43d17a', '#ffd23f', '#5db8ff', '#b07bff'];
+      for (let i = 0; i < fillH; i++) {
+        ctx.fillStyle = colors[(i + Math.floor(f.x * 0.1)) % colors.length];
+        const cx = tx + 1 + (i % 3) * 3;
+        const cy = ty + 14 - i * 2;
+        ctx.fillRect(cx, cy, 3, 2);
+      }
+      if (fillRatio > 0.7) {
+        ctx.fillStyle = colors[Math.floor(f.x * 0.1) % colors.length];
+        ctx.fillRect(tx + 2, ty - 2, 4, 3);
+      }
+    }
+  }
+  standaloneTrashCan(ctx, f) {
+    const snackCount = Store.snacks.length;
+    if (snackCount === 0) return;
+    const tx = f.x, ty = f.y;
+    ctx.fillStyle = '#3a3f4e'; ctx.fillRect(tx, ty, f.w, f.h);
+    ctx.fillStyle = '#2a2f3e'; ctx.fillRect(tx, ty, f.w, 3);
+    ctx.fillStyle = '#4a4f5e'; ctx.fillRect(tx + 1, ty + 4, f.w - 2, 1);
+    const fillRatio = Math.min(1, snackCount / 48);
+    const fillH = Math.floor(fillRatio * (f.h - 6));
+    if (fillH > 0) {
+      const colors = ['#e25c5c', '#43d17a', '#ffd23f', '#5db8ff', '#b07bff'];
+      for (let i = 0; i < fillH; i++) {
+        ctx.fillStyle = colors[(i + Math.floor(f.x * 0.1)) % colors.length];
+        const cx = tx + 1 + (i % 3) * 3;
+        const cy = ty + f.h - 3 - i * 2;
+        ctx.fillRect(cx, cy, 3, 2);
+      }
+      if (fillRatio > 0.7) {
+        ctx.fillStyle = colors[Math.floor(f.x * 0.1) % colors.length];
+        ctx.fillRect(tx + 3, ty - 3, 5, 4);
+        ctx.fillStyle = colors[(Math.floor(f.x * 0.1) + 2) % colors.length];
+        ctx.fillRect(tx - 2, ty - 1, 4, 3);
+      }
+    }
   }
   reception(ctx, f) {
     this.shadowBox(ctx, f.x, f.y, f.w, f.h);
@@ -556,6 +638,19 @@ export class Office {
     this.shadowBox(ctx, f.x, f.y, f.w, f.h);
     ctx.fillStyle = '#9aa3bd'; roundRectC(ctx, f.x, f.y, f.w, f.h, 8); ctx.fill();
     ctx.fillStyle = '#b9c2d8'; roundRectC(ctx, f.x + 4, f.y + 4, f.w - 8, f.h - 8, 6); ctx.fill();
+    // food on meeting table
+    const snackCount = Store.snacks.length;
+    if (snackCount > 0) {
+      const items = Math.min(4, Math.ceil(snackCount / 12));
+      for (let i = 0; i < items; i++) {
+        const snackName = SNACKS[(i * 11 + Math.floor(f.x * 0.1)) % SNACKS.length];
+        const fx = f.x + 20 + i * 30;
+        const fy = f.y + f.h / 2;
+        ctx.save(); ctx.globalAlpha = 0.6;
+        drawSnack(ctx, snackName, fx, fy, 6, this.t);
+        ctx.restore();
+      }
+    }
   }
   plant(ctx, f) {
     ctx.fillStyle = '#3a2a1a'; ctx.fillRect(f.x + 4, f.y + 14, f.w - 8, 16);
@@ -575,6 +670,15 @@ export class Office {
     ctx.fillStyle = '#7b5cff'; roundRectC(ctx, f.x, f.y, f.w, f.h, 8); ctx.fill();
     ctx.fillStyle = '#6a4ce0'; roundRectC(ctx, f.x, f.y, f.w, 12, 6); ctx.fill();
     ctx.fillStyle = '#9b7eff'; ctx.fillRect(f.x + 6, f.y + 16, f.w - 12, 8);
+    // crumbs/wrappers on couch when snacks unlocked
+    if (Store.snacks.length > 0) {
+      const crumbs = Math.min(3, Math.ceil(Store.snacks.length / 20));
+      const colors = ['#e25c5c', '#43d17a', '#ffd23f'];
+      for (let i = 0; i < crumbs; i++) {
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fillRect(f.x + 10 + i * 30, f.y + 20, 4, 3);
+      }
+    }
   }
   shelf(ctx, f) {
     this.shadowBox(ctx, f.x, f.y - 30, f.w, f.h + 30);

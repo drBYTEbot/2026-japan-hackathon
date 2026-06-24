@@ -34,9 +34,9 @@ export class HUD {
   draw(ctx) {
     // ---- top bar background ----
     ctx.save();
-    const g = ctx.createLinearGradient(0, 0, 0, 64);
+    const g = ctx.createLinearGradient(0, 0, 0, 150);
     g.addColorStop(0, 'rgba(10,14,28,0.92)'); g.addColorStop(1, 'rgba(10,14,28,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 70);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 150);
     ctx.restore();
 
     // ---- brand (text only, no logo) ----
@@ -57,9 +57,9 @@ export class HUD {
     pxText(ctx, String(n), cx + 46, cy + (ch - 28) / 2, 4, n > 0 ? '#ffe9a8' : PALETTE.dim);
     pxText(ctx, 'COINS', cx + 46 + pxTextW(n) + 6, cy + 14, 2, PALETTE.dim);
 
-    // ---- sound toggles ----
-    this.iconBtn(ctx, W - 60, 16, 'MUTE', !Audio.isMusicOn(), () => { const on = !Audio.isMusicOn(); Audio.setMusic(on); if (on) requireMusic(); Sfx.click(); });
-    this.iconBtn(ctx, W - 60, 58, 'SFX', !Audio.isSfxOn(), () => { Audio.setSfx(!Audio.isSfxOn()); Sfx.click(); });
+    // ---- sound toggles (below coin counter, no overlap) ----
+    this.iconBtn(ctx, W - 60, 62, 'MUTE', !Audio.isMusicOn(), () => { const on = !Audio.isMusicOn(); Audio.setMusic(on); if (on) requireMusic(); Sfx.click(); });
+    this.iconBtn(ctx, W - 60, 104, 'SFX', !Audio.isSfxOn(), () => { Audio.setSfx(!Audio.isSfxOn()); Sfx.click(); });
 
     // ---- toasts ----
     for (let i = 0; i < this.toasts.length; i++) {
