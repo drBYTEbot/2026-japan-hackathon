@@ -1,5 +1,5 @@
 // fighting.js — PIXEL BRAWL (Hard, 50 coins). 8-bit turn-based RPG, 3 floors.
-import { clamp, lerp, randInt, choice, chance, mulberry32, hashStr, TAU, PALETTE, Particles, pxText, pxTextCenter, addShake } from './util.js';
+import { clamp, lerp, randInt, choice, chance, mulberry32, hashStr, TAU, PALETTE, Particles, pxText, pxTextCenter, addShake, fillRoundRect, strokeRoundRect } from './util.js';
 import { W, H, Input, button, panel, bar, hover, pointer, consumeClick } from './ui.js';
 import { drawCharacter, descriptor, EMPLOYEES, drawSticker } from './characters.js';
 import { Sfx } from './audio.js';
@@ -44,6 +44,7 @@ export class Fighting {
     this.floats = [];
     this.done = false; this.endTimer = 0;
     this.roster = this.pickRoster();
+    this.rosterDesc = this.roster.map(n => descriptor(n));
   }
   pickRoster() {
     // deterministic-ish shuffle of a chunk of employees for variety
@@ -78,7 +79,7 @@ export class Fighting {
     this.parts.update(dt);
     for (let i = this.floats.length - 1; i >= 0; i--) { const f = this.floats[i]; f.life -= dt; f.y -= 30 * dt; if (f.life <= 0) this.floats.splice(i, 1); }
     if (this.enemy) { this.enemy.flash = Math.max(0, this.enemy.flash - dt * 4); this.enemy.bob = Math.sin(this.t * 2) * 6; }
-    for (const p of this.party) p.flash = Math.max(0, p.flash - dt * 4);
+    for (const p of this.party) if (typeof p === 'object') p.flash = Math.max(0, p.flash - dt * 4);
 
     if (this.done) { this.endTimer += dt; return; }
 
@@ -241,28 +242,30 @@ export class Fighting {
     if (this.done) this.drawEnd(ctx);
   }
   drawSelect(ctx) {
-    // bg
     ctx.fillStyle = '#0a0e1c'; ctx.fillRect(0, 0, W, H);
-    pxTextCenter(ctx, 'PIXEL BRAWL', W / 2, 22, 5, PALETTE.red);
-    pxTextCenter(ctx, 'ASSEMBLE YOUR PARTY OF 3', W / 2, 62, 2, PALETTE.dim);
-    pxTextCenter(ctx, this.msg, W / 2, 90, 2, PALETTE.gold);
-    const cellW = 120, cellH = 150, ox = W / 2 - (3 * cellW) / 2, oy = 120;
+    pxTextCenter(ctx, 'PIXEL BRAWL', W / 2, 16, 4, PALETTE.red);
+    pxTextCenter(ctx, 'ASSEMBLE YOUR PARTY OF 3', W / 2, 52, 2, PALETTE.dim);
+    pxTextCenter(ctx, this.msg, W / 2, 74, 2, PALETTE.gold);
+    const cellW = 130, cellH = 120, ox = W / 2 - (3 * cellW) / 2, oy = 92;
     for (let i = 0; i < this.roster.length; i++) {
       const cx = ox + (i % 3) * cellW, cy = oy + Math.floor(i / 3) * cellH;
       const name = this.roster[i];
       const picked = this.party.includes(name);
       const sel = i === this.selectIdx;
-      const rx = cx + 6, ry = cy + 6, rw = cellW - 12, rh = cellH - 12;
+      const rx = cx + 5, ry = cy + 5, rw = cellW - 10, rh = cellH - 10;
       const hov = hover(rx, ry, rw, rh);
       if (hov && pointer.clicked && !pointer.consumed) { consumeClick(); this.togglePick(i); }
-      panel(ctx, rx, ry, rw, rh, { border: picked ? PALETTE.green + 'aa' : (sel || hov ? PALETTE.gold : 'rgba(255,255,255,0.08)'), bg1: picked ? '#16331f' : '#141a2e' });
-      drawCharacter(ctx, cx + cellW / 2, cy + 30, 4, descriptor(name), { t: this.t });
-      const fs = Math.max(1, Math.floor((cellW - 20) / Math.max(name.length, 6) / 6));
-      pxTextCenter(ctx, name, cx + cellW / 2, cy + cellH - 26, fs, picked ? PALETTE.green : PALETTE.ink);
-      if (picked) pxTextCenter(ctx, '[OK]', cx + cellW / 2, cy + 14, 2, PALETTE.green);
+      const border = picked ? PALETTE.green + 'aa' : (sel || hov ? PALETTE.gold : 'rgba(255,255,255,0.08)');
+      const bg = picked ? '#16331f' : '#141a2e';
+      fillRoundRect(ctx, rx, ry, rw, rh, 8, bg);
+      strokeRoundRect(ctx, rx + 0.5, ry + 0.5, rw - 1, rh - 1, 8, 2, border);
+      drawCharacter(ctx, cx + cellW / 2, cy + 22, 3, this.rosterDesc[i], { t: this.t });
+      const fs = Math.max(1, Math.floor((cellW - 16) / Math.max(name.length, 8) / 6));
+      pxTextCenter(ctx, name, cx + cellW / 2, cy + cellH - 22, fs, picked ? PALETTE.green : PALETTE.ink);
+      if (picked) pxTextCenter(ctx, '[OK]', cx + cellW / 2, cy + 12, 2, PALETTE.green);
     }
     const ready = this.party.length === 3;
-    if (button(ctx, W / 2 - 110, H - 56, 220, 42, ready ? 'ENTER THE BRAWL' : `PICK 3 (${this.party.length}/3)`, { scale: 2, fg: ready ? PALETTE.gold : PALETTE.dim, bg: ready ? PALETTE.panel2 : PALETTE.panel, border: ready ? PALETTE.gold : 'rgba(255,255,255,0.08)' })) {
+    if (button(ctx, W / 2 - 120, H - 62, 240, 40, ready ? 'ENTER THE BRAWL' : `PICK 3 (${this.party.length}/3)`, { scale: 2, fg: ready ? PALETTE.gold : PALETTE.dim, bg: ready ? PALETTE.panel2 : PALETTE.panel, border: ready ? PALETTE.gold : 'rgba(255,255,255,0.08)' })) {
       if (ready) this.beginBattle();
     }
   }

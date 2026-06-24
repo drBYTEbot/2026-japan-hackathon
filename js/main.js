@@ -1,6 +1,7 @@
 // main.js — ArcAIdia app: state machine, loop, scaling, audio, side shop button
 import { W, H, init, setView, endFrame, button, pointer, Input, drawLogo, LOGO_SVG } from './ui.js';
-import { clamp, lerp, PALETTE, pxText, pxTextCenter, updateShake, applyShake, Store, roundRect as roundRectS } from './util.js';
+import { clamp, lerp, rand, TAU, PALETTE, pxText, pxTextCenter, updateShake, applyShake, Store, roundRect as roundRectS } from './util.js';
+import { descriptor, drawCharacter, EMPLOYEES } from './characters.js';
 import { initAudio, resumeAudio, playMusic, Audio, Sfx } from './audio.js';
 import { HUD, setMusicHook } from './hud.js';
 import { Office, GAMES } from './office.js';
@@ -29,6 +30,27 @@ class App {
     this.last = performance.now();
     this.music = 'hub';
     setMusicHook(() => playMusic(this.music));
+    this.titleT = 0;
+    this.titleStars = Array.from({ length: 55 }, () => ({
+      x: rand(0, W), y: rand(0, H * 0.48), s: rand(1, 2.5), tw: rand(0, TAU), spd: rand(1, 3),
+    }));
+    this.titleChars = [
+      { desc: descriptor('Saria'), x: -60, dir: 1, spd: 34 },
+      { desc: descriptor('David'), x: W * 0.35, dir: 1, spd: 27 },
+      { desc: descriptor('Misaki'), x: W + 60, dir: -1, spd: 31 },
+      { desc: descriptor('Yagiz'), x: W * 0.7, dir: -1, spd: 38 },
+    ];
+    this.titleBuildings = [
+      { x: 0, w: 70, h: 50 }, { x: 70, w: 45, h: 35 }, { x: 115, w: 60, h: 65 },
+      { x: 175, w: 35, h: 30 }, { x: 210, w: 75, h: 48 }, { x: 285, w: 50, h: 38 },
+      { x: 625, w: 55, h: 42 }, { x: 680, w: 70, h: 60 }, { x: 750, w: 45, h: 35 },
+      { x: 795, w: 65, h: 52 }, { x: 860, w: 50, h: 40 }, { x: 910, w: 50, h: 45 },
+    ];
+    this.titleIcons = [
+      { x: 130, y: 195, ph: 0, type: 'desk' },
+      { x: 830, y: 215, ph: 1.6, type: 'car' },
+      { x: 480, y: 175, ph: 3.1, type: 'sword' },
+    ];
   }
   get ctx2d() { return this.ctx; }
 
@@ -59,7 +81,12 @@ class App {
   update(dt) {
     this.hud.update(dt);
     if (this.state === 'title') {
-      // wait for first click handled in loop
+      this.titleT += dt;
+      for (const c of this.titleChars) {
+        c.x += c.dir * c.spd * dt;
+        if (c.dir > 0 && c.x > W + 60) c.x = -60;
+        if (c.dir < 0 && c.x < -60) c.x = W + 60;
+      }
     } else if (this.state === 'office') {
       this.scenes.office.update(dt);
     } else if (this.state === 'shop') {
@@ -97,22 +124,154 @@ class App {
   }
 
   drawTitle(ctx) {
-    const g = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, W);
-    g.addColorStop(0, '#1a2342'); g.addColorStop(1, '#06080f');
+    const t = this.titleT;
+
+    // === background gradient ===
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0a0820'); g.addColorStop(0.45, '#12103a');
+    g.addColorStop(0.52, '#1a1340'); g.addColorStop(1, '#06050f');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    // floating dust
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    for (let i = 0; i < 40; i++) { const x = (i * 137.5 % W), y = (i * 53.3 % H + performance.now() * 0.02 * (i % 3 + 1)) % H; ctx.fillRect(x, y, 2, 2); }
-    const t = performance.now() / 1000;
-    drawLogo(ctx, W / 2 - 48, 110, 96, t);
-    pxTextCenter(ctx, 'ArcAIdia', W / 2, 230, 6, PALETTE.ink);
-    pxTextCenter(ctx, 'an ai& office arcade', W / 2, 290, 3, PALETTE.dim);
-    const pulse = 0.6 + Math.sin(t * 3) * 0.4;
-    ctx.globalAlpha = pulse;
-    pxTextCenter(ctx, 'CLICK TO PLAY', W / 2, 380, 4, PALETTE.gold);
+
+    // === twinkling stars (upper half) ===
+    for (const s of this.titleStars) {
+      const tw = 0.3 + Math.sin(t * s.spd + s.tw) * 0.7;
+      ctx.globalAlpha = tw * 0.6; ctx.fillStyle = '#fff';
+      ctx.fillRect(s.x, s.y, s.s, s.s);
+    }
     ctx.globalAlpha = 1;
-    pxTextCenter(ctx, 'WASD/ARROWS MOVE   SPACE INTERACT   MOUSE FOR GAMES', W / 2, 470, 2, PALETTE.dim);
-    if (Store.coins > 0 || (Store.owned && Store.owned.length)) pxTextCenter(ctx, 'wallet: ' + Store.coins + ' coins   stickers: ' + (Store.owned?.length || 0), W / 2, 500, 2, PALETTE.accent);
+
+    const horizon = H * 0.52;
+
+    // === horizon glow ===
+    const hg = ctx.createRadialGradient(W / 2, horizon, 0, W / 2, horizon, 220);
+    hg.addColorStop(0, 'rgba(255,100,150,0.18)'); hg.addColorStop(1, 'rgba(255,100,150,0)');
+    ctx.fillStyle = hg; ctx.fillRect(0, horizon - 120, W, 240);
+
+    // === synthwave grid floor ===
+    const vx = W / 2; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(123,92,255,0.22)';
+    for (let i = -10; i <= 10; i++) {
+      if (i === 0) continue;
+      ctx.beginPath(); ctx.moveTo(vx, horizon); ctx.lineTo(vx + i * (W / 5), H); ctx.stroke();
+    }
+    const scroll = (t * 0.5) % 1;
+    for (let i = 0; i < 25; i++) {
+      const z = (i + scroll) / 25;
+      const y = horizon + Math.pow(z, 2.5) * (H - horizon);
+      if (y > H || y < horizon) continue;
+      const a = clamp(z * 1.8, 0, 0.3);
+      ctx.strokeStyle = `rgba(0,224,198,${a})`;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+
+    // === office building silhouettes on horizon ===
+    ctx.fillStyle = 'rgba(8,6,24,0.85)';
+    for (const b of this.titleBuildings) ctx.fillRect(b.x, horizon - b.h, b.w, b.h);
+    ctx.fillStyle = 'rgba(255,207,77,0.12)';
+    for (const b of this.titleBuildings)
+      for (let wy = horizon - b.h + 6; wy < horizon - 4; wy += 10)
+        for (let wx = b.x + 4; wx < b.x + b.w - 4; wx += 12)
+          if ((wx * 7 + wy * 3) % 5 < 2) ctx.fillRect(wx, wy, 3, 3);
+
+    // === walking demo characters on the grid ===
+    for (const c of this.titleChars) {
+      const baseY = horizon + 30;
+      const bob = Math.sin(t * 8 + c.x * 0.04) * 1.5;
+      ctx.globalAlpha = 0.2; ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.ellipse(c.x, baseY + 2, 10, 4, 0, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+      drawCharacter(ctx, c.x, baseY - 36 + bob, 2, c.desc, { t, flip: c.dir < 0 });
+    }
+
+    // === title glow aura ===
+    const tg = ctx.createRadialGradient(W / 2, 95, 0, W / 2, 95, 180);
+    tg.addColorStop(0, 'rgba(123,92,255,0.16)'); tg.addColorStop(1, 'rgba(123,92,255,0)');
+    ctx.fillStyle = tg; ctx.fillRect(W / 2 - 200, 0, 400, 200);
+
+    // === ai& logo ===
+    drawLogo(ctx, W / 2 - 18, 28 + Math.sin(t * 2) * 2, 36, t);
+
+    // === title text — wave + rainbow color cycle ===
+    const title = 'ARCAIDIA', sc = 3, adv = 6 * sc;
+    const totalW = title.length * adv - sc;
+    const startX = W / 2 - totalW / 2;
+    ctx.save();
+    for (let i = 0; i < title.length; i++) {
+      const wave = Math.sin(t * 3 + i * 0.4) * 2;
+      const hue = (t * 25 + i * 18) % 360;
+      ctx.shadowColor = `hsl(${hue},90%,50%)`; ctx.shadowBlur = 12;
+      pxText(ctx, title[i], startX + i * adv, 78 + wave, sc, `hsl(${hue},80%,65%)`);
+    }
+    ctx.restore();
+
+    // === subtitle ===
+    pxTextCenter(ctx, 'AN AI& OFFICE ARCADE', W / 2, 112, 2, 'rgba(139,148,184,0.7)');
+
+    // === floating game icons ===
+    for (const ic of this.titleIcons) {
+      const ix = ic.x + Math.cos(t * 0.8 + ic.ph) * 6;
+      const iy = ic.y + Math.sin(t * 1.5 + ic.ph) * 10;
+      this.drawTitleIcon(ctx, ix, iy, ic.type);
+    }
+
+    // === blinking "CLICK TO PLAY" ===
+    if (Math.sin(t * 4) > -0.3) {
+      ctx.save();
+      ctx.shadowColor = PALETTE.gold; ctx.shadowBlur = 8;
+      pxTextCenter(ctx, 'CLICK TO PLAY', W / 2, 340, 2, PALETTE.gold);
+      ctx.restore();
+    }
+
+    // === controls hint ===
+    pxTextCenter(ctx, 'WASD/ARROWS: MOVE   SPACE: INTERACT   MOUSE: GAMES', W / 2, 378, 1, 'rgba(139,148,184,0.5)');
+
+    // === save info ===
+    if (Store.coins > 0 || (Store.owned && Store.owned.length))
+      pxTextCenter(ctx, 'WALLET: ' + Store.coins + ' COINS   STICKERS: ' + (Store.owned?.length || 0) + '/' + EMPLOYEES.length, W / 2, 406, 1, PALETTE.accent);
+
+    // === marquee lights (border) ===
+    const lc = 50;
+    for (let i = 0; i < lc; i++) {
+      const on = (Math.floor(t * 6) + i) % 3 === 0;
+      ctx.fillStyle = on ? PALETTE.gold : '#2a2418';
+      const x = (i / lc) * W;
+      ctx.fillRect(x, 2, 5, 3); ctx.fillRect(x, H - 5, 5, 3);
+    }
+    const lc2 = 30;
+    for (let i = 0; i < lc2; i++) {
+      const on = (Math.floor(t * 6) + i + 8) % 3 === 0;
+      ctx.fillStyle = on ? PALETTE.gold : '#2a2418';
+      const y = (i / lc2) * H;
+      ctx.fillRect(2, y, 3, 5); ctx.fillRect(W - 5, y, 3, 5);
+    }
+
+    // === CRT scanlines ===
+    ctx.globalAlpha = 0.025; ctx.fillStyle = '#000';
+    for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+    ctx.globalAlpha = 1;
+  }
+  drawTitleIcon(ctx, x, y, type) {
+    ctx.save(); ctx.globalAlpha = 0.6;
+    switch (type) {
+      case 'desk':
+        ctx.fillStyle = '#d8b072'; ctx.fillRect(x - 10, y - 6, 20, 10);
+        ctx.fillStyle = '#c29658'; ctx.fillRect(x - 10, y + 4, 20, 3);
+        ctx.fillStyle = '#0e1320'; ctx.fillRect(x - 7, y - 16, 14, 10);
+        ctx.fillStyle = '#39d2a0'; ctx.fillRect(x - 5, y - 14, 10, 6);
+        break;
+      case 'car':
+        ctx.fillStyle = '#e25c5c'; ctx.fillRect(x - 12, y - 5, 24, 8);
+        ctx.fillStyle = '#bfe6ff'; ctx.fillRect(x - 7, y - 9, 10, 5);
+        ctx.fillStyle = '#222';
+        ctx.beginPath(); ctx.arc(x - 7, y + 3, 2.5, 0, TAU); ctx.arc(x + 7, y + 3, 2.5, 0, TAU); ctx.fill();
+        break;
+      case 'sword':
+        ctx.fillStyle = '#c0c8e0'; ctx.fillRect(x - 1, y - 14, 3, 16);
+        ctx.fillStyle = '#8a6a36'; ctx.fillRect(x - 5, y + 2, 11, 2);
+        ctx.fillStyle = '#ffd23f'; ctx.fillRect(x - 1, y + 4, 2, 4);
+        break;
+    }
+    ctx.restore();
   }
   drawShopButton(ctx) {
     const x = W - 64, y = H / 2 - 50, w = 50, h = 100;
