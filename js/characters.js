@@ -18,14 +18,80 @@ const SHIRT = ['#e25c5c', '#5c8ae2', '#43c97a', '#e2a35c', '#9b5ce2', '#e25cb8',
   '#d6c24a', '#3aa6c9', '#cf5c8a', '#6fce5c', '#e26b3a', '#7a5ce2', '#5cd6a0'];
 const HAT = ['#2b2b3a', '#3a2a1a', '#5a2a3a', '#1a3a3a', '#3a1a3a', '#1a1a2a'];
 
-const HAIR_STYLES = 6; // 0..5
+// Skin tones by ethnicity
+const SKIN_ASIAN = ['#f0d9bf', '#f6cda0', '#ecb382', '#e0c096', '#d9b88a', '#e8ccaa'];
+const SKIN_SOUTH_ASIAN = ['#bb7a48', '#a86a3e', '#c4884f', '#b07040'];
+const SKIN_BLACK = ['#8a4f2c', '#6e4326', '#5a3818', '#7a4020'];
+const SKIN_WHITE = ['#f6cda0', '#f0d9bf', '#ecb382', '#f8d8b8'];
+
+// Hair colors
+const HAIR_BLONDE = ['#caa21f', '#e0bc3a', '#d4b830', '#f0d048'];
+const HAIR_ASIAN = ['#1a1a1a', '#241a12', '#2a1f15', '#332518'];
+const HAIR_SOUTH_ASIAN = ['#1a1a1a', '#241a12', '#3a2a18'];
+const HAIR_BLACK = ['#1a1a1a', '#241a12', '#2a1f15'];
+const HAIR_WHITE = ['#43301f', '#5a3a22', '#6b4226', '#8c6d3f', '#1a1a1a'];
+
+// Per-name ethnicity overrides (defaults to Asian for Japanese/Chinese-sounding names)
+const NAME_OVERRIDES = {
+  'Saria':       { eth: 'black' },
+  'Feifan':      { eth: 'asian', hair: 'blonde' },
+  'David':       { eth: 'white', hair: 'blonde' },
+  'Atul Anand': { eth: 'south_asian' },
+  'Sumer':       { eth: 'south_asian' },
+  'Rajendra':    { eth: 'south_asian' },
+  'Richard':     { eth: 'white' },
+  'Amelia':      { eth: 'white' },
+  'Mike':        { eth: 'white' },
+  'Matt':        { eth: 'white' },
+  'Alex':        { eth: 'white' },
+  'Samantha':    { eth: 'white' },
+  'Mustafa':     { eth: 'south_asian' },
+  'Yagiz':       { eth: 'white' },
+  'John':        { eth: 'white' },
+  'Steven':      { eth: 'white' },
+  'Matthew':     { eth: 'white' },
+  'Mario':       { eth: 'white' },
+  'Sophia':      { eth: 'white' },
+  'Lamu':        { eth: 'asian' },
+  'Obama':       { eth: 'black' },
+};
+
+const HAIR_STYLES = 6;
+
+function ethnicityFor(name) {
+  if (NAME_OVERRIDES[name]) return NAME_OVERRIDES[name].eth;
+  // Default: Asian for the majority of names (Japanese, Chinese, etc.)
+  return 'asian';
+}
+
+function skinFor(eth, rng) {
+  switch (eth) {
+    case 'south_asian': return SKIN_SOUTH_ASIAN[Math.floor(rng() * SKIN_SOUTH_ASIAN.length)];
+    case 'black': return SKIN_BLACK[Math.floor(rng() * SKIN_BLACK.length)];
+    case 'white': return SKIN_WHITE[Math.floor(rng() * SKIN_WHITE.length)];
+    default: return SKIN_ASIAN[Math.floor(rng() * SKIN_ASIAN.length)];
+  }
+}
+
+function hairFor(name, eth, rng) {
+  // Check for blonde override
+  if (NAME_OVERRIDES[name]?.hair === 'blonde') return HAIR_BLONDE[Math.floor(rng() * HAIR_BLONDE.length)];
+  switch (eth) {
+    case 'south_asian': return HAIR_SOUTH_ASIAN[Math.floor(rng() * HAIR_SOUTH_ASIAN.length)];
+    case 'black': return HAIR_BLACK[Math.floor(rng() * HAIR_BLACK.length)];
+    case 'white': return HAIR_WHITE[Math.floor(rng() * HAIR_WHITE.length)];
+    default: return HAIR_ASIAN[Math.floor(rng() * HAIR_ASIAN.length)];
+  }
+}
+
 export function descriptor(name) {
   const rng = mulberry32(hashStr(name.toLowerCase()));
   const pick = arr => arr[Math.floor(rng() * arr.length)];
+  const eth = ethnicityFor(name);
   return {
     name,
-    skin: pick(SKIN),
-    hair: pick(HAIR),
+    skin: skinFor(eth, rng),
+    hair: hairFor(name, eth, rng),
     shirt: pick(SHIRT),
     hat: rng() < 0.35 ? pick(HAT) : null,
     hatStyle: Math.floor(rng() * 3),
