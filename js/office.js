@@ -1,6 +1,6 @@
 // office.js — the main hub: an ai& office with 3 game platforms, claw machine, spawn point
 import { clamp, lerp, rand, TAU, PALETTE, Particles, pxText, pxTextCenter, dist, roundRect as roundRectC } from './util.js';
-import { W, H, Input, button, pointer, hover, drawLogo } from './ui.js';
+import { W, H, Input, button, pointer, hover } from './ui.js';
 import { drawCharacter, descriptor } from './characters.js';
 import { Sfx } from './audio.js';
 
@@ -276,9 +276,8 @@ export class Office {
     ctx.save();
     ctx.fillStyle = '#e9edf7'; roundRectC(ctx, b.x, b.y, b.w, b.h, 6); ctx.fill();
     ctx.fillStyle = '#d4dae8'; ctx.fillRect(b.x, b.y + b.h - 6, b.w, 6);
-    drawLogo(ctx, b.x + 12, b.y + 12, 46, this.t);
-    pxText(ctx, 'ai&', b.x + 70, b.y + 18, 6, '#2a3050');
-    pxText(ctx, 'ENGINEERING', b.x + 70, b.y + 48, 2, '#6b7393');
+    pxText(ctx, 'ai& ENGINEERING', b.x + 16, b.y + 24, 3, '#2a3050');
+    pxText(ctx, 'WELCOME', b.x + 16, b.y + 48, 2, '#6b7393');
     ctx.restore();
   }
   drawPlatform(ctx, p) {
@@ -461,8 +460,7 @@ export class Office {
       ctx.fillStyle = '#11172a'; roundRectC(ctx, x, y, w, h, 12); ctx.fill();
       ctx.shadowBlur = 0;
       ctx.strokeStyle = p.color; ctx.lineWidth = 2; roundRectC(ctx, x + 1, y + 1, w - 2, h - 2, 11); ctx.stroke();
-      drawLogo(ctx, x + 14, y + 14, 26, this.t);
-      pxText(ctx, p.name, x + 56, y + 14, 3, '#fff');
+      pxText(ctx, p.name, x + 16, y + 14, 3, '#fff');
       pxText(ctx, p.diff + '  +' + p.reward + ' COINS', x + 56, y + 40, 2, p.color);
       pxText(ctx, p.desc, x + 16, y + 64, 2, PALETTE.dim);
       ctx.restore();

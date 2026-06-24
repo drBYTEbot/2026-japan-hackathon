@@ -1,5 +1,5 @@
 // main.js — ArcAIdia app: state machine, loop, scaling, audio, side shop button
-import { W, H, init, setView, endFrame, button, pointer, Input, drawLogo, LOGO_SVG } from './ui.js';
+import { W, H, init, setView, endFrame, button, pointer, Input } from './ui.js';
 import { clamp, lerp, rand, TAU, PALETTE, pxText, pxTextCenter, updateShake, applyShake, Store, roundRect as roundRectS } from './util.js';
 import { descriptor, drawCharacter, EMPLOYEES } from './characters.js';
 import { initAudio, resumeAudio, playMusic, Audio, Sfx } from './audio.js';
