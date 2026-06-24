@@ -69,8 +69,12 @@ export const Store = {
   get owned() { return loadSave().owned || []; },
   owns(name) { return this.owned.includes(name); },
   addOwned(name) { if (!this.owns(name)) { const s = loadSave(); s.owned = (s.owned || []).concat(name); saveSave(s); } },
+  get snacks() { return loadSave().snacks || []; },
+  ownsSnack(name) { return this.snacks.includes(name); },
+  addSnack(name) { if (!this.ownsSnack(name)) { const s = loadSave(); s.snacks = (s.snacks || []).concat(name); saveSave(s); } },
   get best() { return loadSave().best || {}; },
   setBest(game, v) { const s = loadSave(); s.best = s.best || {}; if (!s.best[game] || v > s.best[game]) { s.best[game] = v; saveSave(s); } },
+  allStickersCollected() { return this.owned.length >= 48; },
 };
 
 // ---------- canvas helpers ----------

@@ -1,7 +1,7 @@
-// clawshop.js — claw machine prize shop + employee sticker collection
+// clawshop.js — claw machine / vending machine prize shop + sticker collection
 import { clamp, lerp, rand, randInt, choice, TAU, PALETTE, Particles, pxText, pxTextCenter, Store, roundRect as roundRectM } from './util.js';
 import { W, H, button, panel, hover, pointer, consumeClick } from './ui.js';
-import { EMPLOYEES, descriptor, drawCharacter, drawSticker } from './characters.js';
+import { EMPLOYEES, descriptor, drawCharacter, drawSticker, SNACKS, drawSnack, drawSnackSticker } from './characters.js';
 import { Sfx } from './audio.js';
 
 const COST = 1;
@@ -21,11 +21,14 @@ export class ClawShop {
     this.perPage = 24;
     this.clawX = 230; this.clawY = 60; this.clawOpen = 1;
     this.capsule = null;
-    this.reveal = null; // {name, isNew, scale, life}
+    this.reveal = null;
     this.prizes = this.makePrizes();
     this.autoPlay = false;
     this.autoCount = 0;
-    this.msg = 'Insert coins to win a teammate sticker!';
+    this.vendingMode = Store.allStickersCollected();
+    this.vendDispenseY = 0;
+    this.vendItem = null;
+    this.msg = this.vendingMode ? 'Insert coins to win snacks!' : 'Insert coins to win a teammate sticker!';
   }
   makePrizes() {
     // floating capsule prizes inside the machine
@@ -36,7 +39,7 @@ export class ClawShop {
     }
     return arr;
   }
-  get pages() { return Math.ceil(EMPLOYEES.length / this.perPage); }
+  get pages() { return Math.ceil((this.vendingMode ? SNACKS : EMPLOYEES).length / this.perPage); }
 
   update(dt) {
     this.t += dt;
@@ -46,6 +49,7 @@ export class ClawShop {
 
     if (this.phase === 'playing') this.updatePlay(dt);
     if (this.phase === 'reveal') this.updateReveal(dt);
+    if (this.phase === 'vending') this.updateVending(dt);
   }  updatePlay(dt) {
     this.timer += dt;
     const T = this.timer;
@@ -88,9 +92,26 @@ export class ClawShop {
         this.tryPlay();
       } else {
         this.phase = 'idle'; this.autoPlay = false;
-        this.msg = 'Out of coins! Collected ' + this.autoCount + ' stickers.';
+        this.msg = 'Out of coins! Collected ' + this.autoCount + ' items.';
       }
     }
+  }
+  updateVending(dt) {
+    this.timer += dt;
+    // item drops down over 1s, then reveal
+    if (this.timer < 1.0) {
+      this.vendDispenseY = lerp(0, 200, this.timer / 1.0);
+    } else {
+      this.startSnackReveal(this.vendItem);
+    }
+  }
+  startSnackReveal(name) {
+    const isNew = !Store.ownsSnack(name);
+    this.phase = 'reveal';
+    this.reveal = { name, isNew, scale: 0.2, life: 0, _burst: false, isSnack: true };
+    if (isNew) { Store.addSnack(name); this.msg = 'NEW SNACK! ' + name; }
+    else { this.msg = 'Duplicate snack! ' + name; }
+    this.vendItem = null;
   }
   startReveal(name) {
     const isNew = !Store.owns(name);
@@ -105,16 +126,29 @@ export class ClawShop {
     if (Store.coins < COST) { Sfx.deny(); this.msg = 'Not enough coins!'; return; }
     Store.addCoins(-COST);
     if (this.autoPlay) this.autoCount++;
-    Sfx.clawGrab();
-    // choose winner (favor unowned)
-    const unowned = EMPLOYEES.filter(n => !Store.owns(n));
-    let winner;
-    if (unowned.length && Math.random() < 0.8) winner = choice(unowned);
-    else winner = choice(EMPLOYEES);
-    this._winner = winner;
-    this._target = choice(this.prizes);
-    this.phase = 'playing'; this.timer = 0;
-    this.msg = 'Grabbing a prize...';
+    if (this.vendingMode) {
+      // vending machine: pick a snack
+      Sfx.clawGrab();
+      const unowned = SNACKS.filter(n => !Store.ownsSnack(n));
+      let winner;
+      if (unowned.length && Math.random() < 0.8) winner = choice(unowned);
+      else winner = choice(SNACKS);
+      this._winner = winner;
+      this.phase = 'vending'; this.timer = 0;
+      this.vendDispenseY = 0;
+      this.vendItem = winner;
+      this.msg = 'Dispensing snack...';
+    } else {
+      Sfx.clawGrab();
+      const unowned = EMPLOYEES.filter(n => !Store.owns(n));
+      let winner;
+      if (unowned.length && Math.random() < 0.8) winner = choice(unowned);
+      else winner = choice(EMPLOYEES);
+      this._winner = winner;
+      this._target = choice(this.prizes);
+      this.phase = 'playing'; this.timer = 0;
+      this.msg = 'Grabbing a prize...';
+    }
   }
   startAutoPlay() {
     if (Store.coins < COST) { Sfx.deny(); this.msg = 'Not enough coins!'; return; }
@@ -132,10 +166,15 @@ export class ClawShop {
     ctx.fillStyle = 'rgba(123,92,255,0.05)';
     for (let x = 0; x < W; x += 40) for (let y = 0; y < H; y += 40) if ((x + y) % 80 === 0) ctx.fillRect(x, y, 20, 20);
 
-    pxTextCenter(ctx, 'CLAW MACHINE', W / 2, 20, 5, PALETTE.gold);
+    if (this.vendingMode) {
+      pxTextCenter(ctx, 'SNACK VENDING MACHINE', W / 2, 20, 4, PALETTE.accent);
+    } else {
+      pxTextCenter(ctx, 'CLAW MACHINE', W / 2, 20, 5, PALETTE.gold);
+    }
     pxTextCenter(ctx, this.msg, W / 2, 56, 2, PALETTE.ink);
 
-    this.drawMachine(ctx);
+    if (this.vendingMode) this.drawVendingMachine(ctx);
+    else this.drawMachine(ctx);
     this.drawCollection(ctx);
 
     // insert 1 coin button (bottom of machine)
@@ -216,27 +255,90 @@ export class ClawShop {
       ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(this.capsule.x - 4, this.capsule.y - 4, 4, 0, TAU); ctx.fill();
     }
   }
+  drawVendingMachine(ctx) {
+    const mx = 60, my = 90, mw = 340, mh = 380;
+    // body
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 24;
+    ctx.fillStyle = '#1a3a30'; roundRectM(ctx, mx, my, mw, mh, 16); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#0c2018'; roundRectM(ctx, mx, my, mw, 40, 16); ctx.fill();
+    pxTextCenter(ctx, 'SNACKS', mx + mw / 2, my + 14, 2, PALETTE.accent);
+    // glass front
+    ctx.fillStyle = 'rgba(100,200,180,0.10)'; roundRectM(ctx, mx + 16, my + 48, mw - 32, 280, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2; roundRectM(ctx, mx + 16, my + 48, mw - 32, 280, 8); ctx.stroke();
+    // snack shelves
+    const snackSample = SNACKS.slice(0, 15);
+    for (let row = 0; row < 4; row++) {
+      const sy = my + 60 + row * 64;
+      // shelf line
+      ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(mx + 20, sy + 50, mw - 40, 2);
+      for (let col = 0; col < 5; col++) {
+        const idx = row * 5 + col;
+        if (idx >= snackSample.length) break;
+        const sx = mx + 30 + col * 58;
+        // snack silhouette
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        drawSnack(ctx, snackSample[idx], sx + 22, sy + 22, 14, this.t);
+        ctx.restore();
+      }
+    }
+    // dispense animation
+    if (this.phase === 'vending' && this.vendItem) {
+      const dy = my + 300 + this.vendDispenseY;
+      if (dy < my + mh - 20) {
+        ctx.save();
+        drawSnack(ctx, this.vendItem, mx + mw / 2, dy, 18, this.t);
+        ctx.restore();
+      }
+    }
+    // dispenser slot
+    ctx.fillStyle = '#000'; roundRectM(ctx, mx + mw / 2 - 30, my + mh - 30, 60, 16, 4); ctx.fill();
+    ctx.fillStyle = '#1a3a30'; roundRectM(ctx, mx + mw / 2 - 28, my + mh - 28, 56, 12, 3); ctx.fill();
+    // buttons
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = (Math.sin(this.t * 3 + i) > 0) ? PALETTE.accent : '#0c2018';
+      ctx.beginPath(); ctx.arc(mx + 30 + i * 20, my + mh - 42, 5, 0, TAU); ctx.fill();
+    }
+    // legs
+    ctx.fillStyle = '#1a3a30'; ctx.fillRect(mx + 20, my + mh, 16, 14); ctx.fillRect(mx + mw - 36, my + mh, 16, 14);
+  }
   drawCollection(ctx) {
     const px = 430, py = 90, pw = 490, ph = 380;
     panel(ctx, px, py, pw, ph, { r: 14 });
-    pxText(ctx, 'STICKER COLLECTION', px + 16, py + 12, 2, PALETTE.gold);
-    const owned = EMPLOYEES.filter(n => Store.owns(n)).length;
-    pxText(ctx, owned + '/' + EMPLOYEES.length, px + pw - 70, py + 12, 2, PALETTE.ink);
+    if (this.vendingMode) {
+      pxText(ctx, 'SNACK COLLECTION', px + 16, py + 12, 2, PALETTE.accent);
+      const owned = Store.snacks.filter(n => Store.ownsSnack(n)).length;
+      pxText(ctx, owned + '/' + SNACKS.length, px + pw - 70, py + 12, 2, PALETTE.ink);
+      // also show employee count
+      pxText(ctx, 'STAFF 48/48', px + pw - 180, py + 12, 2, PALETTE.green);
+    } else {
+      pxText(ctx, 'STICKER COLLECTION', px + 16, py + 12, 2, PALETTE.gold);
+      const owned = EMPLOYEES.filter(n => Store.owns(n)).length;
+      pxText(ctx, owned + '/' + EMPLOYEES.length, px + pw - 70, py + 12, 2, PALETTE.ink);
+    }
 
     const cols = 6, cell = 74;
     const gx = px + 16, gy = py + 40;
     const start = this.page * this.perPage;
+    const items = this.vendingMode ? SNACKS : EMPLOYEES;
     for (let i = 0; i < this.perPage; i++) {
       const idx = start + i;
-      if (idx >= EMPLOYEES.length) break;
+      if (idx >= items.length) break;
       const cx = gx + (i % cols) * cell, cy = gy + Math.floor(i / cols) * cell;
       if (cx + cell > px + pw - 12) break;
-      drawSticker(ctx, EMPLOYEES[idx], cx, cy, cell - 8, this.t, { owned: Store.owns(EMPLOYEES[idx]) });
+      if (this.vendingMode) {
+        drawSnackSticker(ctx, items[idx], cx, cy, cell - 8, this.t, { owned: Store.ownsSnack(items[idx]) });
+      } else {
+        drawSticker(ctx, items[idx], cx, cy, cell - 8, this.t, { owned: Store.owns(items[idx]) });
+      }
     }
     // page nav
+    const totalPages = Math.ceil(items.length / this.perPage);
     if (button(ctx, px + 16, py + ph - 36, 80, 26, '< PREV', { scale: 2 }) && this.page > 0) { this.page--; Sfx.hover(); }
-    if (button(ctx, px + pw - 96, py + ph - 36, 80, 26, 'NEXT >', { scale: 2 }) && this.page < this.pages - 1) { this.page++; Sfx.hover(); }
-    pxTextCenter(ctx, 'PAGE ' + (this.page + 1) + '/' + this.pages, px + pw / 2, py + ph - 30, 2, PALETTE.dim);
+    if (button(ctx, px + pw - 96, py + ph - 36, 80, 26, 'NEXT >', { scale: 2 }) && this.page < totalPages - 1) { this.page++; Sfx.hover(); }
+    pxTextCenter(ctx, 'PAGE ' + (this.page + 1) + '/' + totalPages, px + pw / 2, py + ph - 30, 2, PALETTE.dim);
   }
   drawReveal(ctx) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H);
@@ -244,13 +346,23 @@ export class ClawShop {
     const size = 220 * r.scale;
     // rays
     ctx.save(); ctx.translate(W / 2, 300); ctx.globalAlpha = 0.5;
-    for (let i = 0; i < 12; i++) { ctx.rotate(TAU / 12); ctx.fillStyle = r.isNew ? 'rgba(255,207,77,0.12)' : 'rgba(93,184,255,0.10)'; ctx.fillRect(-6, -200, 12, 200); }
+    const rayColor = r.isNew ? (r.isSnack ? 'rgba(0,224,198,0.12)' : 'rgba(255,207,77,0.12)') : 'rgba(93,184,255,0.10)';
+    for (let i = 0; i < 12; i++) { ctx.rotate(TAU / 12); ctx.fillStyle = rayColor; ctx.fillRect(-6, -200, 12, 200); }
     ctx.restore();
-    drawSticker(ctx, r.name, W / 2 - size / 2, 300 - size / 2, size, this.t, { owned: true });
-    pxTextCenter(ctx, r.isNew ? 'NEW TEAMMATE!' : 'DUPLICATE!', W / 2, 180, 4, r.isNew ? PALETTE.gold : PALETTE.blue);
-    if (!r.isNew) pxTextCenter(ctx, 'DUPLICATE', W / 2, 420, 3, PALETTE.dim);
-    if (button(ctx, W / 2 - 90, 470, 180, 40, 'COLLECT', { scale: 2, fg: PALETTE.gold, border: PALETTE.gold })) {
-      this.capsule = null; this.reveal = null; this.phase = 'idle'; this.msg = 'Insert coins to win a teammate sticker!'; Sfx.coin();
+    if (r.isSnack) {
+      // snack reveal
+      drawSnackSticker(ctx, r.name, W / 2 - size / 2, 300 - size / 2, size, this.t, { owned: true });
+      pxTextCenter(ctx, r.isNew ? 'NEW SNACK!' : 'DUPLICATE!', W / 2, 180, 4, r.isNew ? PALETTE.accent : PALETTE.blue);
+      if (!r.isNew) pxTextCenter(ctx, 'DUPLICATE', W / 2, 420, 3, PALETTE.dim);
+    } else {
+      drawSticker(ctx, r.name, W / 2 - size / 2, 300 - size / 2, size, this.t, { owned: true });
+      pxTextCenter(ctx, r.isNew ? 'NEW TEAMMATE!' : 'DUPLICATE!', W / 2, 180, 4, r.isNew ? PALETTE.gold : PALETTE.blue);
+      if (!r.isNew) pxTextCenter(ctx, 'DUPLICATE', W / 2, 420, 3, PALETTE.dim);
+    }
+    if (button(ctx, W / 2 - 90, 470, 180, 40, 'COLLECT', { scale: 2, fg: r.isSnack ? PALETTE.accent : PALETTE.gold, border: r.isSnack ? PALETTE.accent : PALETTE.gold })) {
+      this.capsule = null; this.reveal = null; this.phase = 'idle';
+      this.msg = this.vendingMode ? 'Insert coins to win snacks!' : 'Insert coins to win a teammate sticker!';
+      Sfx.coin();
     }
   }
 }

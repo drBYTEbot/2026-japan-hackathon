@@ -1,5 +1,5 @@
 // office.js — the main hub: an ai& office with 3 game platforms, claw machine, spawn point
-import { clamp, lerp, rand, TAU, PALETTE, Particles, pxText, pxTextCenter, dist, roundRect as roundRectC } from './util.js';
+import { clamp, lerp, rand, TAU, PALETTE, Particles, pxText, pxTextCenter, dist, roundRect as roundRectC, Store } from './util.js';
 import { W, H, Input, button, pointer, hover } from './ui.js';
 import { drawCharacter, descriptor } from './characters.js';
 import { Sfx } from './audio.js';
@@ -30,6 +30,7 @@ export class Office {
     this.lockout = 0;          // prevents instant re-entry after returning
     this.t = 0;
     this.dust = new Particles();
+    this.trail = [];
     this.build();
   }
   build() {
@@ -178,6 +179,16 @@ export class Office {
     // dust motes
     if (Math.random() < dt * 6) this.dust.burst(rand(0, W), rand(0, H) + this.cam.y, 1, { color: 'rgba(255,255,255,0.25)', speed: 8, life: 4, size: 2 });
     this.dust.update(dt);
+
+    // glowing trail when all stickers collected
+    if (Store.allStickersCollected()) {
+      this.trail.push({ x: this.player.x, y: this.player.y - 20, life: 0.8, max: 0.8, hue: (this.t * 120) % 360 });
+      if (this.trail.length > 30) this.trail.shift();
+    }
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      this.trail[i].life -= dt;
+      if (this.trail[i].life <= 0) this.trail.splice(i, 1);
+    }
   }
   moveAxis(dx, dy) {
     this.player.x += dx; this.player.y += dy;
@@ -217,6 +228,8 @@ export class Office {
     for (const p of this.platforms) this.drawPlatform(ctx, p);
     // boss platform
     this.drawPlatform(ctx, this.bossPlatform);
+    // glowing trail (drawn before player)
+    this.drawTrail(ctx);
     // player
     this.drawPlayer(ctx);
     this.dust.draw(ctx);
@@ -338,7 +351,33 @@ export class Office {
     ctx.save(); ctx.globalAlpha = 0.3; ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, 12, 5, 0, 0, TAU); ctx.fill(); ctx.restore();
     const bob = Math.sin(p.anim) * 1.5;
+    // aura glow when all stickers collected
+    if (Store.allStickersCollected()) {
+      ctx.save();
+      const r = 30 + Math.sin(this.t * 3) * 6;
+      const g = ctx.createRadialGradient(p.x, p.y - 20, 0, p.x, p.y - 20, r);
+      g.addColorStop(0, 'rgba(255,207,77,0.3)'); g.addColorStop(1, 'rgba(255,207,77,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - 20, r, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
     drawCharacter(ctx, p.x, p.y - 40 + bob, 2, PLAYER_DESC, { t: this.t, flip: p.face < 0 });
+  }
+  drawTrail(ctx) {
+    if (this.trail.length < 2) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < this.trail.length; i++) {
+      const p = this.trail[i];
+      const a = p.life / p.max;
+      const size = a * 8 + 2;
+      const hue = p.hue;
+      ctx.globalAlpha = a * 0.5;
+      ctx.fillStyle = `hsl(${hue}, 80%, 60%)`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, size, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
   }
   drawFurniture(ctx, f) {
     ctx.save();
@@ -434,27 +473,40 @@ export class Office {
   }
   clawMachine(ctx, f) {
     const active = px2(this.player, f, 60) && this.lockout <= 0;
+    const isVending = Store.allStickersCollected();
     ctx.save();
-    if (active) { ctx.shadowColor = PALETTE.gold; ctx.shadowBlur = 16 + Math.sin(this.t * 4) * 6; }
-    // base
-    ctx.fillStyle = '#3a2a4a'; roundRectC(ctx, f.x, f.y + 40, f.w, 24, 4); ctx.fill();
-    // glass box
-    ctx.fillStyle = 'rgba(120,180,255,0.12)'; roundRectC(ctx, f.x, f.y, f.w, 44, 4); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 2; roundRectC(ctx, f.x, f.y, f.w, 44, 4); ctx.stroke();
-    // claw rail
-    ctx.fillStyle = '#9aa3bd'; ctx.fillRect(f.x + 4, f.y + 4, f.w - 8, 4);
-    // claw (moves)
-    const cx = f.x + f.w / 2 + Math.sin(this.t) * 18;
-    ctx.fillStyle = '#ffd23f'; ctx.fillRect(cx - 2, f.y + 8, 4, 10);
-    ctx.fillStyle = '#e8a35c';
-    ctx.beginPath(); ctx.moveTo(cx - 6, f.y + 18); ctx.lineTo(cx + 6, f.y + 18); ctx.lineTo(cx + 3, f.y + 24); ctx.lineTo(cx, f.y + 20); ctx.lineTo(cx - 3, f.y + 24); ctx.closePath(); ctx.fill();
-    // prizes inside
-    for (let i = 0; i < 5; i++) {
-      ctx.fillStyle = ['#e25c5c', '#5db8ff', '#43d17a', '#ffd23f', '#b07bff'][i];
-      ctx.beginPath(); ctx.arc(f.x + 14 + i * 13, f.y + 36, 5, 0, TAU); ctx.fill();
+    if (active) { ctx.shadowColor = isVending ? PALETTE.accent : PALETTE.gold; ctx.shadowBlur = 16 + Math.sin(this.t * 4) * 6; }
+    if (isVending) {
+      // vending machine
+      ctx.fillStyle = '#1a3a30'; roundRectC(ctx, f.x, f.y, f.w, f.h + 40, 4); ctx.fill();
+      ctx.fillStyle = '#0c2018'; roundRectC(ctx, f.x + 4, f.y + 4, f.w - 8, f.h + 20, 3); ctx.fill();
+      // snack slots
+      const snackCols = ['#e2a35c', '#43d17a', '#e25c5c', '#ffd23f', '#b07bff'];
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(f.x + 8 + i * 13, f.y + 8, 10, 16);
+        ctx.fillStyle = snackCols[i]; ctx.fillRect(f.x + 10 + i * 13, f.y + 10, 6, 12);
+      }
+      // dispenser slot
+      ctx.fillStyle = '#000'; ctx.fillRect(f.x + f.w / 2 - 12, f.y + f.h + 10, 24, 8);
+      // buttons
+      for (let i = 0; i < 3; i++) { ctx.fillStyle = (Math.sin(this.t * 3 + i) > 0) ? PALETTE.accent : '#1a3a30'; ctx.beginPath(); ctx.arc(f.x + 20 + i * 18, f.y + f.h + 2, 4, 0, TAU); ctx.fill(); }
+      pxTextCenter(ctx, 'SNACKS', f.x + f.w / 2, f.y - 10, 2, PALETTE.accent);
+    } else {
+      // claw machine (original)
+      ctx.fillStyle = '#3a2a4a'; roundRectC(ctx, f.x, f.y + 40, f.w, 24, 4); ctx.fill();
+      ctx.fillStyle = 'rgba(120,180,255,0.12)'; roundRectC(ctx, f.x, f.y, f.w, 44, 4); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 2; roundRectC(ctx, f.x, f.y, f.w, 44, 4); ctx.stroke();
+      ctx.fillStyle = '#9aa3bd'; ctx.fillRect(f.x + 4, f.y + 4, f.w - 8, 4);
+      const cx = f.x + f.w / 2 + Math.sin(this.t) * 18;
+      ctx.fillStyle = '#ffd23f'; ctx.fillRect(cx - 2, f.y + 8, 4, 10);
+      ctx.fillStyle = '#e8a35c';
+      ctx.beginPath(); ctx.moveTo(cx - 6, f.y + 18); ctx.lineTo(cx + 6, f.y + 18); ctx.lineTo(cx + 3, f.y + 24); ctx.lineTo(cx, f.y + 20); ctx.lineTo(cx - 3, f.y + 24); ctx.closePath(); ctx.fill();
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = ['#e25c5c', '#5db8ff', '#43d17a', '#ffd23f', '#b07bff'][i];
+        ctx.beginPath(); ctx.arc(f.x + 14 + i * 13, f.y + 36, 5, 0, TAU); ctx.fill();
+      }
+      pxTextCenter(ctx, 'SHOP', f.x + f.w / 2, f.y - 10, 2, PALETTE.gold);
     }
-    // sign
-    pxTextCenter(ctx, 'SHOP', f.x + f.w / 2, f.y - 10, 2, PALETTE.gold);
     if (active) pxTextCenter(ctx, 'PRESS SPACE', f.x + f.w / 2, f.y + 70, 2, '#fff');
     ctx.restore();
   }
