@@ -88,10 +88,9 @@ export class Office {
     // standalone trash cans around office (visible when snacks unlocked)
     this.furn.push({ x: 200, y: 510 + OY, w: 12, h: 18, type: 'trashcan' });
     this.furn.push({ x: 700, y: 510 + OY, w: 12, h: 18, type: 'trashcan' });
-    this.furn.push({ x: 480, y: 400 + OY, w: 12, h: 18, type: 'trashcan' });
     this.furn.push({ x: 480, y: 600 + OY, w: 12, h: 18, type: 'trashcan' });
     // claw machine (top-right corner of main office)
-    this.claw = { x: 820, y: 90 + OY, w: 80, h: 64 };
+    this.claw = { x: 820, y: 70 + OY, w: 80, h: 64 };
     // platforms (bottom row)
     this.platforms = [
       { ...GAMES[0], x: 200, y: 600 + OY, w: 120, h: 80 },

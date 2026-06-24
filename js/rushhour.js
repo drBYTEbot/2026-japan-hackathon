@@ -226,9 +226,10 @@ export class RushHour {
     if (this.drag && this.drag.car.id === car.id) {
       if (car.dir === 'h') c = this.drag.startC + this.drag.off; else r = this.drag.startR + this.drag.off;
     }
-    const x = BX + c * CELL + 4, y = BY + r * CELL + 4;
-    const w = (car.dir === 'h' ? car.len * CELL : CELL) - 8;
-    const h = (car.dir === 'h' ? CELL : car.len * CELL) - 8;
+    const pad = 8;
+    const x = BX + c * CELL + pad, y = BY + r * CELL + pad;
+    const w = (car.dir === 'h' ? car.len * CELL : CELL) - pad * 2;
+    const h = (car.dir === 'h' ? CELL : car.len * CELL) - pad * 2;
     ctx.save();
     // shadow
     ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; this.rr(ctx, x + 3, y + 4, w, h, 8); ctx.fill(); ctx.globalAlpha = 1;
@@ -248,7 +249,7 @@ export class RushHour {
       ctx.fillStyle = '#39d2a0'; ctx.fillRect(x + 8, y + 6, 12, 8);
       // drawer lines
       ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1;
-      if (car.dir === 'h') { for (let i = 1; i < car.len; i++) { ctx.beginPath(); ctx.moveTo(x + i * (CELL - 8) - 4, y + 4); ctx.lineTo(x + i * (CELL - 8) - 4, y + h - 4); ctx.stroke(); } }
+      if (car.dir === 'h') { for (let i = 1; i < car.len; i++) { ctx.beginPath(); ctx.moveTo(x + i * (CELL - pad * 2) - 4, y + 4); ctx.lineTo(x + i * (CELL - pad * 2) - 4, y + h - 4); ctx.stroke(); } }
     }
     ctx.restore();
   }

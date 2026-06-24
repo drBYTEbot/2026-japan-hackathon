@@ -327,9 +327,10 @@ export class BossGame {
       if (this.rushDrag && this.rushDrag.car.id === car.id) {
         if (car.dir === 'h') c = this.rushDrag.startC + this.rushDrag.off; else r = this.rushDrag.startR + this.rushDrag.off;
       }
-      const x = RBX + c * RCELL + 4, y = RBY + r * RCELL + 4;
-      const w = (car.dir === 'h' ? car.len * RCELL : RCELL) - 8;
-      const h = (car.dir === 'h' ? RCELL : car.len * RCELL) - 8;
+      const pad = 8;
+      const x = RBX + c * RCELL + pad, y = RBY + r * RCELL + pad;
+      const w = (car.dir === 'h' ? car.len * RCELL : RCELL) - pad * 2;
+      const h = (car.dir === 'h' ? RCELL : car.len * RCELL) - pad * 2;
       if (car.t) {
         ctx.fillStyle = '#3a4254'; ctx.fillRect(x, y + h - 10, w, 12);
         drawCharacter(ctx, x + w / 2, y - 6, 2, this.desc, { t: this.t });
