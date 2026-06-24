@@ -9,9 +9,9 @@ const TILE = 48;
 
 // game platform definitions
 export const GAMES = [
-  { id: 'rush', name: 'DESK JAM', sub: 'Rush Hour', diff: 'EASY', reward: 10, color: PALETTE.green, desc: 'Slide desks aside. Escape the office!' },
-  { id: 'crossy', name: 'CROSSWALK', sub: 'Crossy Road', diff: 'MEDIUM', reward: 30, color: PALETTE.blue, desc: 'Cross the road. Dodge the cars.' },
-  { id: 'fight', name: 'PIXEL BRAWL', sub: 'Turn Battle', diff: 'HARD', reward: 50, color: PALETTE.red, desc: '8-bit party battle. 3 floors.' },
+  { id: 'rush', name: 'DESK JAM', sub: 'Rush Hour', diff: 'EASY', reward: 20, color: PALETTE.green, desc: 'Slide desks aside. Escape the office!' },
+  { id: 'crossy', name: 'CROSSWALK', sub: 'Crossy Road', diff: 'MEDIUM', reward: 25, color: PALETTE.blue, desc: 'Cross the road. Dodge the cars.' },
+  { id: 'fight', name: 'PIXEL BRAWL', sub: 'Turn Battle', diff: 'HARD', reward: 35, color: PALETTE.red, desc: '8-bit party battle. 3 floors.' },
 ];
 
 const PLAYER_DESC = (() => { const d = descriptor('ArcAIdia-Hero'); d.shirt = '#3a6df0'; d.hair = '#241a12'; d.hat = null; d.glasses = false; return d; })();

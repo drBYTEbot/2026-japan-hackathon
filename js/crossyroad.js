@@ -258,10 +258,10 @@ export class CrossyRoad {
     const bw = 360, bh = 180, bx = W / 2 - bw / 2, by = H / 2 - bh / 2;
     panel(ctx, bx, by, bw, bh, { border: win ? PALETTE.gold : PALETTE.red });
     pxTextCenter(ctx, win ? 'YOU MADE IT!' : (this.deathMsg || 'OUCH!'), W / 2, by + 28, 5, win ? PALETTE.gold : PALETTE.red);
-    pxTextCenter(ctx, win ? '+30 COINS' : 'NO COINS', W / 2, by + 78, 4, win ? PALETTE.green : PALETTE.dim);
+    pxTextCenter(ctx, win ? '+25 COINS' : 'NO COINS', W / 2, by + 78, 4, win ? PALETTE.green : PALETTE.dim);
     pxTextCenter(ctx, 'reached row ' + this.farthest, W / 2, by + 116, 2, PALETTE.dim);
     if (this.endTimer > 0.4 && button(ctx, W / 2 - 80, by + bh - 50, 160, 36, 'BACK TO OFFICE', { scale: 2 })) {
-      this.app.exitGame(win ? 'win' : 'lose', win ? 30 : 0);
+      this.app.exitGame(win ? 'win' : 'lose', win ? 25 : 0);
     }
   }
   rr(ctx, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }

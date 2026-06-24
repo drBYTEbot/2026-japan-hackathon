@@ -4,8 +4,8 @@ import { W, H, button, panel, hover, pointer, consumeClick } from './ui.js';
 import { EMPLOYEES, descriptor, drawCharacter, drawSticker } from './characters.js';
 import { Sfx } from './audio.js';
 
-const COST = 20;
-const DUPE_BONUS = 5;
+const COST = 1;
+const DUPE_BONUS = 0;
 
 export class ClawShop {
   constructor(app) {
@@ -85,7 +85,7 @@ export class ClawShop {
     this.phase = 'reveal';
     this.reveal = { name, isNew, scale: 0.2, life: 0, _burst: false };
     if (isNew) { Store.addOwned(name); this.msg = 'NEW TEAMMATE! ' + name; }
-    else { Store.addCoins(DUPE_BONUS); this.msg = 'Duplicate! ' + name + '  +' + DUPE_BONUS + ' coins'; }
+    else { this.msg = 'Duplicate! ' + name; }
     this.capsule = null;
   }
   tryPlay() {
@@ -96,7 +96,7 @@ export class ClawShop {
     // choose winner (favor unowned)
     const unowned = EMPLOYEES.filter(n => !Store.owns(n));
     let winner;
-    if (unowned.length && Math.random() < 0.7) winner = choice(unowned);
+    if (unowned.length && Math.random() < 0.8) winner = choice(unowned);
     else winner = choice(EMPLOYEES);
     this._winner = winner;
     this._target = choice(this.prizes);
@@ -214,7 +214,7 @@ export class ClawShop {
     ctx.restore();
     drawSticker(ctx, r.name, W / 2 - size / 2, 300 - size / 2, size, this.t, { owned: true });
     pxTextCenter(ctx, r.isNew ? 'NEW TEAMMATE!' : 'DUPLICATE!', W / 2, 180, 4, r.isNew ? PALETTE.gold : PALETTE.blue);
-    if (!r.isNew) pxTextCenter(ctx, '+' + DUPE_BONUS + ' BONUS COINS', W / 2, 420, 3, PALETTE.gold);
+    if (!r.isNew) pxTextCenter(ctx, 'DUPLICATE', W / 2, 420, 3, PALETTE.dim);
     if (button(ctx, W / 2 - 90, 470, 180, 40, 'COLLECT', { scale: 2, fg: PALETTE.gold, border: PALETTE.gold })) {
       this.capsule = null; this.reveal = null; this.phase = 'idle'; this.msg = 'Insert coins to win a teammate sticker!'; Sfx.coin();
     }

@@ -174,7 +174,7 @@ export class RushHour {
 
     // header
     pxTextCenter(ctx, 'DESK JAM', W / 2, 18, 4, PALETTE.ink);
-    pxTextCenter(ctx, 'SLIDE DESKS · ESCAPE THE OFFICE · EASY +10', W / 2, 52, 2, PALETTE.dim);
+    pxTextCenter(ctx, 'SLIDE DESKS · ESCAPE THE OFFICE · EASY +20', W / 2, 52, 2, PALETTE.dim);
 
     // board
     this.drawBoard(ctx);
@@ -274,10 +274,10 @@ export class RushHour {
     const bw = 360, bh = 180, bx = W / 2 - bw / 2, by = H / 2 - bh / 2;
     panel(ctx, bx, by, bw, bh, { border: win ? PALETTE.gold : PALETTE.red });
     pxTextCenter(ctx, win ? 'YOU ESCAPED!' : "TIME'S UP", W / 2, by + 28, 5, win ? PALETTE.gold : PALETTE.red);
-    pxTextCenter(ctx, win ? '+10 COINS' : 'NO COINS', W / 2, by + 78, 4, win ? PALETTE.green : PALETTE.dim);
+    pxTextCenter(ctx, win ? '+20 COINS' : 'NO COINS', W / 2, by + 78, 4, win ? PALETTE.green : PALETTE.dim);
     pxTextCenter(ctx, this.moves + ' moves', W / 2, by + 116, 2, PALETTE.dim);
     if (this.endTimer > 0.4 && button(ctx, W / 2 - 80, by + bh - 50, 160, 36, 'BACK TO OFFICE', { scale: 2 })) {
-      this.app.exitGame(win ? 'win' : 'lose', win ? 10 : 0);
+      this.app.exitGame(win ? 'win' : 'lose', win ? 20 : 0);
     }
     ctx.restore();
   }
