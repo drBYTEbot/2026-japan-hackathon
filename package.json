@@ -1,0 +1,14 @@
+{
+  "name": "arcadia",
+  "version": "1.0.0",
+  "description": "ArcAIdia — an immersive office-themed arcade by ai&",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "serve": "node serve.js",
+    "check": "node --check js/util.js && node --check js/audio.js && node --check js/characters.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.61.1"
+  }
+}

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>ArcAIdia — an ai& office arcade</title>
+<meta name="description" content="ArcAIdia — an immersive office-themed arcade by ai& with three mini-games and a claw-machine sticker shop." />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div id="boot">
+  <svg id="bootlogo" viewBox="0 0 128 128" width="96" height="96" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7b5cff"/><stop offset="1" stop-color="#00e0c6"/></linearGradient></defs>
+    <rect x="6" y="6" width="116" height="116" rx="30" fill="url(#g)"/>
+    <text x="64" y="86" font-family="monospace" font-weight="bold" font-size="58" text-anchor="middle" fill="#ffffff">ai<tspan fill="#ffcf4d">&amp;</tspan></text>
+  </svg>
+  <div id="bootmsg">Loading ArcAIdia…</div>
+</div>
+<canvas id="game" width="960" height="540"></canvas>
+<noscript><div class="nojs">ArcAIdia needs JavaScript enabled to run.</div></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

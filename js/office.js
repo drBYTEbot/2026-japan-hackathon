@@ -1,0 +1,405 @@
+// office.js — the main hub: an ai& office with 3 game platforms, claw machine, spawn point
+import { clamp, lerp, rand, TAU, PALETTE, Particles, pxText, pxTextCenter, dist, roundRect as roundRectC } from './util.js';
+import { W, H, Input, button, pointer, hover, drawLogo } from './ui.js';
+import { drawCharacter, descriptor } from './characters.js';
+import { Sfx } from './audio.js';
+
+export const WORLD_W = 960, WORLD_H = 720;
+const TILE = 48;
+
+// game platform definitions
+export const GAMES = [
+  { id: 'rush', name: 'DESK JAM', sub: 'Rush Hour', diff: 'EASY', reward: 10, color: PALETTE.green, desc: 'Slide desks aside. Escape the office!' },
+  { id: 'crossy', name: 'CROSSWALK', sub: 'Crossy Road', diff: 'MEDIUM', reward: 30, color: PALETTE.blue, desc: 'Cross the road. Dodge the cars.' },
+  { id: 'fight', name: 'PIXEL BRAWL', sub: 'Turn Battle', diff: 'HARD', reward: 50, color: PALETTE.red, desc: '8-bit party battle. 3 floors.' },
+];
+
+const PLAYER_DESC = (() => { const d = descriptor('ArcAIdia-Hero'); d.shirt = '#3a6df0'; d.hair = '#241a12'; d.hat = null; d.glasses = false; return d; })();
+
+export class Office {
+  constructor(app) {
+    this.app = app;
+    this.player = { x: 480, y: 400, vx: 0, vy: 0, face: 1, anim: 0, speed: 175 };
+    this.cam = { y: 0 };
+    this.spawn = { x: 480, y: 400 };
+    this.activePlatform = null;
+    this.enterTimer = 0;       // counts up while on a platform
+    this.enterGame = null;     // game id pending
+    this.lockout = 0;          // prevents instant re-entry after returning
+    this.t = 0;
+    this.dust = new Particles();
+    this.build();
+  }
+  build() {
+    this.furn = [];
+    const wall = 22;
+    this.walls = [
+      { x: 0, y: 0, w: WORLD_W, h: wall }, { x: 0, y: WORLD_H - wall, w: WORLD_W, h: wall },
+      { x: 0, y: 0, w: wall, h: WORLD_H }, { x: WORLD_W - wall, y: 0, w: wall, h: WORLD_H },
+    ];
+    // reception desk (top-left)
+    this.furn.push({ x: 60, y: 70, w: 150, h: 44, type: 'reception' });
+    // whiteboard with logo (decoration, not collision)
+    this.logoBoard = { x: 384, y: 22, w: 192, h: 70 };
+    // engineering desk bays
+    const bays = [
+      [70, 200], [250, 200], [640, 200], [820, 200],
+      [70, 320], [250, 320], [640, 320], [820, 320],
+    ];
+    for (const [bx, by] of bays) this.furn.push({ x: bx, y: by, w: 86, h: 56, type: 'desk', hue: rand(0, 360) });
+    // meeting table (center)
+    this.furn.push({ x: 410, y: 250, w: 140, h: 70, type: 'table' });
+    // plants
+    this.furn.push({ x: 40, y: 150, w: 30, h: 30, type: 'plant' });
+    this.furn.push({ x: 890, y: 150, w: 30, h: 30, type: 'plant' });
+    this.furn.push({ x: 40, y: 660, w: 30, h: 30, type: 'plant' });
+    this.furn.push({ x: 890, y: 660, w: 30, h: 30, type: 'plant' });
+    // water cooler
+    this.furn.push({ x: 430, y: 470, w: 34, h: 34, type: 'cooler' });
+    // couch (lounge)
+    this.furn.push({ x: 70, y: 470, w: 120, h: 44, type: 'couch' });
+    // bookshelf
+    this.furn.push({ x: 770, y: 470, w: 120, h: 30, type: 'shelf' });
+    // coffee machine
+    this.furn.push({ x: 600, y: 470, w: 40, h: 34, type: 'coffee' });
+    // claw machine (top-right corner)
+    this.claw = { x: 820, y: 90, w: 80, h: 64 };
+    // platforms (bottom row)
+    this.platforms = [
+      { ...GAMES[0], x: 200, y: 600, w: 120, h: 80 },
+      { ...GAMES[1], x: 480, y: 600, w: 120, h: 80 },
+      { ...GAMES[2], x: 760, y: 600, w: 120, h: 80 },
+    ];
+    // collision boxes = walls + furniture (claw machine too)
+    this.solid = [...this.walls, ...this.furn, { ...this.claw, type: 'claw' }];
+  }
+  onEnter() {
+    this.player.x = this.spawn.x; this.player.y = this.spawn.y;
+    this.player.vx = 0; this.player.vy = 0;
+    this.lockout = 0.9;
+    this.activePlatform = null; this.enterTimer = 0; this.enterGame = null;
+  }
+  update(dt) {
+    this.t += dt;
+    if (this.lockout > 0) this.lockout -= dt;
+
+    // ---- movement ----
+    const ax = Input.axis();
+    const len = Math.hypot(ax.x, ax.y) || 1;
+    const sp = this.player.speed;
+    this.player.vx = (ax.x / len) * sp * (ax.x || ax.y ? 1 : 0);
+    this.player.vy = (ax.y / len) * sp * (ax.x || ax.y ? 1 : 0);
+    if (ax.x) this.player.face = ax.x < 0 ? -1 : 1;
+    if (ax.x || ax.y) this.player.anim += dt * 10; else this.player.anim = 0;
+
+    // move + collide (axis separated)
+    this.moveAxis(this.player.vx * dt, 0);
+    this.moveAxis(0, this.player.vy * dt);
+    this.player.x = clamp(this.player.x, 30, WORLD_W - 30);
+    this.player.y = clamp(this.player.y, 40, WORLD_H - 30);
+
+    // camera follow
+    const targetCam = clamp(this.player.y - H / 2 - 20, 0, WORLD_H - H);
+    this.cam.y = lerp(this.cam.y, targetCam, 1 - Math.pow(0.001, dt));
+
+    // ---- platform activation ----
+    let onPlat = null;
+    for (const p of this.platforms) {
+      const px = this.player.x, py = this.player.y;
+      if (px > p.x - p.w / 2 - 20 && px < p.x + p.w / 2 + 20 && py > p.y - p.h / 2 - 10 && py < p.y + p.h / 2 + 30) {
+        onPlat = p; break;
+      }
+    }
+    // claw machine proximity
+    let nearClaw = false;
+    if (px2(this.player, this.claw, 60)) nearClaw = true;
+
+    if (this.lockout <= 0) {
+      if (onPlat) {
+        if (this.activePlatform !== onPlat) { this.activePlatform = onPlat; this.enterTimer = 0; this.enterGame = onPlat.id; }
+        this.enterTimer += dt;
+        if (this.enterTimer >= 1.4) { this.app.enterGame(this.enterGame); this.enterTimer = 0; }
+        if (Input.pressed(' ') || Input.pressed('enter')) { this.app.enterGame(onPlat.id); this.enterTimer = 0; }
+      } else if (nearClaw) {
+        this.activePlatform = null;
+        if ((Input.pressed(' ') || Input.pressed('enter') || this.clickWorld(this.claw)) && !pointer.consumed) {
+          pointer.consumed = true; this.app.openShop();
+        }
+      } else {
+        this.activePlatform = null; this.enterTimer = 0; this.enterGame = null;
+      }
+      // click a platform to enter instantly
+      if (onPlat && this.clickWorld({ x: onPlat.x - 60, y: onPlat.y - 40, w: 120, h: 80 }) && !pointer.consumed) {
+        pointer.consumed = true; this.app.enterGame(onPlat.id);
+      }
+    } else {
+      this.activePlatform = null;
+    }
+
+    // dust motes
+    if (Math.random() < dt * 6) this.dust.burst(rand(0, W), rand(0, H) + this.cam.y, 1, { color: 'rgba(255,255,255,0.25)', speed: 8, life: 4, size: 2 });
+    this.dust.update(dt);
+  }
+  moveAxis(dx, dy) {
+    this.player.x += dx; this.player.y += dy;
+    const pb = this.feetBox();
+    for (const s of this.solid) {
+      const sb = { x: s.x, y: s.y, w: s.w, h: s.h };
+      if (pb.x < sb.x + sb.w && pb.x + pb.w > sb.x && pb.y < sb.y + sb.h && pb.y + pb.h > sb.y) {
+        if (dx > 0) this.player.x = sb.x - pb.w - 0.01;
+        else if (dx < 0) this.player.x = sb.x + sb.w + 0.01;
+        if (dy > 0) this.player.y = sb.y - pb.h - 0.01;
+        else if (dy < 0) this.player.y = sb.y + sb.h + 0.01;
+        pb.x = this.player.x - pb.w / 2; pb.y = this.player.y - pb.h;
+      }
+    }
+  }
+  feetBox() { return { x: this.player.x - 9, y: this.player.y - 8, w: 18, h: 16 }; }
+  clickWorld(box) {
+    if (!pointer.clicked || pointer.consumed) return false;
+    const wx = pointer.x, wy = pointer.y + this.cam.y;
+    return wx >= box.x && wx <= box.x + box.w && wy >= box.y && wy <= box.y + box.h;
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(0, -this.cam.y);
+    this.drawFloor(ctx);
+    // spawn pad
+    this.drawSpawnPad(ctx);
+    // furniture (sorted by y for depth)
+    const items = [...this.furn, { ...this.claw, type: 'claw' }].sort((a, b) => (a.y + a.h) - (b.y + b.h));
+    for (const f of items) this.drawFurniture(ctx, f);
+    // logo board on wall
+    this.drawLogoBoard(ctx);
+    // platforms
+    for (const p of this.platforms) this.drawPlatform(ctx, p);
+    // player
+    this.drawPlayer(ctx);
+    this.dust.draw(ctx);
+    ctx.restore();
+
+    // screen-space prompts
+    this.drawPrompts(ctx);
+  }
+  drawFloor(ctx) {
+    // base
+    ctx.fillStyle = '#cfd6e6'; ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+    // carpet border
+    ctx.fillStyle = '#b9c2d8'; ctx.fillRect(22, 22, WORLD_W - 44, WORLD_H - 44);
+    // tile grid
+    ctx.strokeStyle = 'rgba(120,130,160,0.18)'; ctx.lineWidth = 1;
+    for (let x = TILE; x < WORLD_W; x += TILE) { ctx.beginPath(); ctx.moveTo(x, 22); ctx.lineTo(x, WORLD_H - 22); ctx.stroke(); }
+    for (let y = TILE; y < WORLD_H; y += TILE) { ctx.beginPath(); ctx.moveTo(22, y); ctx.lineTo(WORLD_W - 22, y); ctx.stroke(); }
+    // meeting rug
+    ctx.save(); ctx.globalAlpha = 0.5;
+    ctx.fillStyle = '#7b6bd6'; roundRectC(ctx, 390, 240, 180, 90, 10); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'; roundRectC(ctx, 404, 254, 152, 62, 6); ctx.fill();
+    ctx.restore();
+    // wall top highlight
+    ctx.fillStyle = '#9aa3bd'; ctx.fillRect(0, 0, WORLD_W, 22);
+    ctx.fillStyle = '#7f88a4'; ctx.fillRect(0, 0, WORLD_W, 6);
+  }
+  drawSpawnPad(ctx) {
+    const { x, y } = this.spawn;
+    const p = 0.5 + Math.sin(this.t * 2) * 0.2;
+    ctx.save();
+    ctx.globalAlpha = 0.5 * p;
+    const g = ctx.createRadialGradient(x, y, 4, x, y, 40);
+    g.addColorStop(0, 'rgba(0,224,198,0.6)'); g.addColorStop(1, 'rgba(0,224,198,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 40, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = 'rgba(0,224,198,0.7)'; ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]); ctx.lineDashOffset = -this.t * 12;
+    ctx.beginPath(); ctx.arc(x, y, 26, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    pxTextCenter(ctx, 'HOME', x, y - 4, 2, 'rgba(0,180,160,0.8)');
+    ctx.restore();
+  }
+  drawLogoBoard(ctx) {
+    const b = this.logoBoard;
+    ctx.save();
+    ctx.fillStyle = '#e9edf7'; roundRectC(ctx, b.x, b.y, b.w, b.h, 6); ctx.fill();
+    ctx.fillStyle = '#d4dae8'; ctx.fillRect(b.x, b.y + b.h - 6, b.w, 6);
+    drawLogo(ctx, b.x + 12, b.y + 12, 46, this.t);
+    pxText(ctx, 'ai&', b.x + 70, b.y + 18, 6, '#2a3050');
+    pxText(ctx, 'ENGINEERING', b.x + 70, b.y + 48, 2, '#6b7393');
+    ctx.restore();
+  }
+  drawPlatform(ctx, p) {
+    const active = this.activePlatform === p;
+    const cy = p.y - 30 + Math.sin(this.t * 2) * 4;
+    ctx.save();
+    // pad
+    ctx.globalAlpha = active ? 0.9 : 0.55;
+    const g = ctx.createRadialGradient(p.x, p.y, 4, p.x, p.y, 70);
+    g.addColorStop(0, p.color + 'cc'); g.addColorStop(1, p.color + '00');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, 64, 34, 0, 0, TAU); ctx.fill();
+    // ring
+    ctx.globalAlpha = active ? 1 : 0.7;
+    ctx.strokeStyle = p.color; ctx.lineWidth = active ? 3 : 2;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, 54, 28, 0, 0, TAU); ctx.stroke();
+    // beam
+    ctx.globalAlpha = active ? 0.22 : 0.10;
+    const bg = ctx.createLinearGradient(0, cy - 120, 0, cy);
+    bg.addColorStop(0, p.color + '00'); bg.addColorStop(1, p.color + 'aa');
+    ctx.fillStyle = bg; ctx.beginPath();
+    ctx.moveTo(p.x - 30, cy); ctx.lineTo(p.x + 30, cy); ctx.lineTo(p.x + 18, cy - 120); ctx.lineTo(p.x - 18, cy - 120); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    // floating cabinet icon
+    this.drawCabinetIcon(ctx, p.x, cy - 80, p.color, active);
+    // label
+    pxTextCenter(ctx, p.name, p.x, cy - 110, 3, '#fff');
+    pxTextCenter(ctx, p.diff + '  +' + p.reward, p.x, cy - 92, 2, p.color);
+    // enter progress
+    if (active && this.enterTimer > 0) {
+      const r = this.enterTimer / 1.4;
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 38, -Math.PI / 2, -Math.PI / 2 + r * TAU); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  drawCabinetIcon(ctx, x, y, color, glow) {
+    ctx.save();
+    if (glow) { ctx.shadowColor = color; ctx.shadowBlur = 16; }
+    ctx.fillStyle = '#222a40'; roundRectC(ctx, x - 16, y - 24, 32, 40, 3); ctx.fill();
+    ctx.fillStyle = color; ctx.fillRect(x - 12, y - 20, 24, 18);
+    ctx.fillStyle = '#0a0e18'; ctx.fillRect(x - 10, y - 18, 20, 14);
+    ctx.fillStyle = color; ctx.fillRect(x - 4, y - 4, 8, 8);
+    ctx.fillStyle = '#222a40'; ctx.fillRect(x - 16, y + 16, 32, 4);
+    ctx.restore();
+  }
+  drawPlayer(ctx) {
+    const p = this.player;
+    // shadow
+    ctx.save(); ctx.globalAlpha = 0.3; ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, 12, 5, 0, 0, TAU); ctx.fill(); ctx.restore();
+    const bob = Math.sin(p.anim) * 1.5;
+    drawCharacter(ctx, p.x, p.y - 40 + bob, 2, PLAYER_DESC, { t: this.t, flip: p.face < 0 });
+  }
+  drawFurniture(ctx, f) {
+    ctx.save();
+    switch (f.type) {
+      case 'desk': this.desk(ctx, f); break;
+      case 'reception': this.reception(ctx, f); break;
+      case 'table': this.table(ctx, f); break;
+      case 'plant': this.plant(ctx, f); break;
+      case 'cooler': this.cooler(ctx, f); break;
+      case 'couch': this.couch(ctx, f); break;
+      case 'shelf': this.shelf(ctx, f); break;
+      case 'coffee': this.coffee(ctx, f); break;
+      case 'claw': this.clawMachine(ctx, f); break;
+    }
+    ctx.restore();
+  }
+  shadowBox(ctx, x, y, w, h) { ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = '#000'; roundRectC(ctx, x + 3, y + 4, w, h, 6); ctx.fill(); ctx.restore(); }
+  desk(ctx, f) {
+    this.shadowBox(ctx, f.x, f.y, f.w, f.h);
+    ctx.fillStyle = '#d8b072'; roundRectC(ctx, f.x, f.y, f.w, f.h, 5); ctx.fill();
+    ctx.fillStyle = '#c29658'; ctx.fillRect(f.x, f.y + f.h - 6, f.w, 6);
+    ctx.fillStyle = '#5b6b8c'; ctx.fillRect(f.x + 8, f.y - 16, 30, 18); // monitor stand
+    ctx.fillStyle = '#0e1320'; roundRectC(ctx, f.x + 6, f.y - 26, 34, 22, 2); ctx.fill();
+    ctx.fillStyle = '#39d2a0'; ctx.fillRect(f.x + 9, f.y - 23, 28, 16);
+    ctx.fillStyle = '#1a2030'; ctx.fillRect(f.x + f.w / 2 - 6, f.y + 8, 12, 4); // keyboard
+    // chair
+    ctx.fillStyle = '#2a2f44'; roundRectC(ctx, f.x + f.w / 2 - 10, f.y + f.h + 4, 20, 12, 4); ctx.fill();
+  }
+  reception(ctx, f) {
+    this.shadowBox(ctx, f.x, f.y, f.w, f.h);
+    ctx.fillStyle = '#8a93b4'; roundRectC(ctx, f.x, f.y, f.w, f.h, 6); ctx.fill();
+    ctx.fillStyle = '#6b7393'; ctx.fillRect(f.x, f.y + f.h - 8, f.w, 8);
+    pxTextCenter(ctx, 'RECEPTION', f.x + f.w / 2, f.y + 12, 2, '#fff');
+    // bell
+    ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(f.x + f.w - 18, f.y + 16, 5, 0, TAU); ctx.fill();
+  }
+  table(ctx, f) {
+    this.shadowBox(ctx, f.x, f.y, f.w, f.h);
+    ctx.fillStyle = '#9aa3bd'; roundRectC(ctx, f.x, f.y, f.w, f.h, 8); ctx.fill();
+    ctx.fillStyle = '#b9c2d8'; roundRectC(ctx, f.x + 4, f.y + 4, f.w - 8, f.h - 8, 6); ctx.fill();
+  }
+  plant(ctx, f) {
+    ctx.fillStyle = '#3a2a1a'; ctx.fillRect(f.x + 4, f.y + 14, f.w - 8, 16);
+    const g = ctx.createLinearGradient(0, f.y, 0, f.y + 20);
+    g.addColorStop(0, '#43c97a'); g.addColorStop(1, '#2e8c5a');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(f.x + f.w / 2, f.y + 8, 16, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#2e8c5a'; ctx.beginPath(); ctx.arc(f.x + f.w / 2 - 8, f.y + 2, 8, 0, TAU); ctx.fill();
+  }
+  cooler(ctx, f) {
+    this.shadowBox(ctx, f.x, f.y - 20, f.w, f.h + 20);
+    ctx.fillStyle = '#d9dbe6'; roundRectC(ctx, f.x, f.y - 20, f.w, f.h + 20, 4); ctx.fill();
+    ctx.fillStyle = '#5db8ff'; ctx.fillRect(f.x + 4, f.y - 16, f.w - 8, 18);
+    ctx.fillStyle = '#9aa0b4'; ctx.fillRect(f.x + f.w / 2 - 3, f.y + 4, 6, 8);
+  }
+  couch(ctx, f) {
+    this.shadowBox(ctx, f.x, f.y, f.w, f.h);
+    ctx.fillStyle = '#7b5cff'; roundRectC(ctx, f.x, f.y, f.w, f.h, 8); ctx.fill();
+    ctx.fillStyle = '#6a4ce0'; roundRectC(ctx, f.x, f.y, f.w, 12, 6); ctx.fill();
+    ctx.fillStyle = '#9b7eff'; ctx.fillRect(f.x + 6, f.y + 16, f.w - 12, 8);
+  }
+  shelf(ctx, f) {
+    this.shadowBox(ctx, f.x, f.y - 30, f.w, f.h + 30);
+    ctx.fillStyle = '#6b4226'; roundRectC(ctx, f.x, f.y - 30, f.w, f.h + 30, 3); ctx.fill();
+    const cols = ['#e25c5c', '#5c8ae2', '#43c97a', '#e2a35c', '#9b5ce2'];
+    for (let i = 0; i < 8; i++) { ctx.fillStyle = cols[i % cols.length]; ctx.fillRect(f.x + 6 + i * 14, f.y - 26, 10, 22); }
+  }
+  coffee(ctx, f) {
+    this.shadowBox(ctx, f.x, f.y - 6, f.w, f.h + 6);
+    ctx.fillStyle = '#2a2f44'; roundRectC(ctx, f.x, f.y - 6, f.w, f.h + 6, 4); ctx.fill();
+    ctx.fillStyle = '#1a1f30'; ctx.fillRect(f.x + 6, f.y, f.w - 12, 12);
+    ctx.fillStyle = '#6b4226'; ctx.fillRect(f.x + 10, f.y + 2, 8, 8);
+  }
+  clawMachine(ctx, f) {
+    const active = px2(this.player, f, 60) && this.lockout <= 0;
+    ctx.save();
+    if (active) { ctx.shadowColor = PALETTE.gold; ctx.shadowBlur = 16 + Math.sin(this.t * 4) * 6; }
+    // base
+    ctx.fillStyle = '#3a2a4a'; roundRectC(ctx, f.x, f.y + 40, f.w, 24, 4); ctx.fill();
+    // glass box
+    ctx.fillStyle = 'rgba(120,180,255,0.12)'; roundRectC(ctx, f.x, f.y, f.w, 44, 4); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 2; roundRectC(ctx, f.x, f.y, f.w, 44, 4); ctx.stroke();
+    // claw rail
+    ctx.fillStyle = '#9aa3bd'; ctx.fillRect(f.x + 4, f.y + 4, f.w - 8, 4);
+    // claw (moves)
+    const cx = f.x + f.w / 2 + Math.sin(this.t) * 18;
+    ctx.fillStyle = '#ffd23f'; ctx.fillRect(cx - 2, f.y + 8, 4, 10);
+    ctx.fillStyle = '#e8a35c';
+    ctx.beginPath(); ctx.moveTo(cx - 6, f.y + 18); ctx.lineTo(cx + 6, f.y + 18); ctx.lineTo(cx + 3, f.y + 24); ctx.lineTo(cx, f.y + 20); ctx.lineTo(cx - 3, f.y + 24); ctx.closePath(); ctx.fill();
+    // prizes inside
+    for (let i = 0; i < 5; i++) {
+      ctx.fillStyle = ['#e25c5c', '#5db8ff', '#43d17a', '#ffd23f', '#b07bff'][i];
+      ctx.beginPath(); ctx.arc(f.x + 14 + i * 13, f.y + 36, 5, 0, TAU); ctx.fill();
+    }
+    // sign
+    pxTextCenter(ctx, 'SHOP', f.x + f.w / 2, f.y - 10, 2, PALETTE.gold);
+    if (active) pxTextCenter(ctx, 'PRESS SPACE', f.x + f.w / 2, f.y + 70, 2, '#fff');
+    ctx.restore();
+  }
+  drawPrompts(ctx) {
+    // platform info card when standing on one
+    const p = this.activePlatform;
+    if (p && this.lockout <= 0) {
+      const w = 360, h = 96, x = W / 2 - w / 2, y = H - h - 16;
+      ctx.save();
+      ctx.globalAlpha = 0.96;
+      ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 18;
+      ctx.fillStyle = '#11172a'; roundRectC(ctx, x, y, w, h, 12); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = p.color; ctx.lineWidth = 2; roundRectC(ctx, x + 1, y + 1, w - 2, h - 2, 11); ctx.stroke();
+      drawLogo(ctx, x + 14, y + 14, 26, this.t);
+      pxText(ctx, p.name, x + 56, y + 14, 3, '#fff');
+      pxText(ctx, p.diff + '  +' + p.reward + ' COINS', x + 56, y + 40, 2, p.color);
+      pxText(ctx, p.desc, x + 16, y + 64, 2, PALETTE.dim);
+      ctx.restore();
+    }
+    // controls hint (fade after movement)
+    if (this.t < 8) {
+      const a = clamp((8 - this.t) / 2, 0, 1);
+      ctx.save(); ctx.globalAlpha = a;
+      pxTextCenter(ctx, 'WASD / ARROWS TO MOVE    STEP ON A PAD TO PLAY    SPACE TO INTERACT', W / 2, H - 30, 2, 'rgba(255,255,255,0.7)');
+      ctx.restore();
+    }
+  }
+}
+
+function px2(p, b, pad = 0) {
+  return p.x > b.x - pad && p.x < b.x + b.w + pad && p.y > b.y - pad && p.y < b.y + b.h + pad;
+}
