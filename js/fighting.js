@@ -146,9 +146,13 @@ export class Fighting {
     this.phase = 'select';
     this.party = [];           // chosen names
     this.partySkills = [];     // chosen skill index per party member
+    this.partyRoles = [];      // chosen role per party member
     this.selectIdx = 0;
-    this.skillSelectIdx = 0;   // which party member is choosing a skill
+    this.skillSelectIdx = 0;   // which party member is choosing
     this.skillCursor = 0;      // cursor in the skill list
+    this.skillSubPhase = 'role'; // 'role' or 'skill'
+    this.roleCursor = 0;       // cursor in role grid
+    this.roleKeys = Object.keys(ROLES);
     this.level = 0;
     this.msg = 'Pick 3 team members';
     this.floats = [];
@@ -237,32 +241,65 @@ export class Fighting {
       Sfx.select();
     }
   }
-  // ---------- skill select ----------
+  // ---------- skill select (two-step: pick role, then pick skill) ----------
   updateSkillSelect(dt) {
     const name = this.party[this.skillSelectIdx];
-    const role = roleFor(name);
-    const skills = ROLES[role].skills;
-    const numSkills = skills.length;
-    if (Input.pressed('arrowleft') || Input.pressed('a')) { this.skillCursor = (this.skillCursor + numSkills - 1) % numSkills; Sfx.hover(); }
-    if (Input.pressed('arrowright') || Input.pressed('d')) { this.skillCursor = (this.skillCursor + 1) % numSkills; Sfx.hover(); }
-    if (Input.pressed('arrowup') || Input.pressed('w')) { this.skillCursor = (this.skillCursor + numSkills - 1) % numSkills; Sfx.hover(); }
-    if (Input.pressed('arrowdown') || Input.pressed('s')) { this.skillCursor = (this.skillCursor + 1) % numSkills; Sfx.hover(); }
-    if (Input.pressed('enter') || Input.pressed(' ')) {
-      this.partySkills[this.skillSelectIdx] = this.skillCursor;
-      Sfx.select();
-      this.skillSelectIdx++;
-      this.skillCursor = 0;
-      if (this.skillSelectIdx >= 3) {
-        this.beginBattle();
+    const numRoles = this.roleKeys.length;
+
+    if (this.skillSubPhase === 'role') {
+      // navigate role grid (4 cols x 2 rows)
+      if (Input.pressed('arrowleft') || Input.pressed('a')) { this.roleCursor = (this.roleCursor + numRoles - 1) % numRoles; Sfx.hover(); }
+      if (Input.pressed('arrowright') || Input.pressed('d')) { this.roleCursor = (this.roleCursor + 1) % numRoles; Sfx.hover(); }
+      if (Input.pressed('arrowup') || Input.pressed('w')) { this.roleCursor = (this.roleCursor + numRoles - 4) % numRoles; Sfx.hover(); }
+      if (Input.pressed('arrowdown') || Input.pressed('s')) { this.roleCursor = (this.roleCursor + 4) % numRoles; Sfx.hover(); }
+      if (Input.pressed('enter') || Input.pressed(' ')) {
+        this.partyRoles[this.skillSelectIdx] = this.roleKeys[this.roleCursor];
+        this.skillSubPhase = 'skill';
+        this.skillCursor = 0;
+        Sfx.select();
+      }
+    } else {
+      // skill selection
+      const role = this.partyRoles[this.skillSelectIdx];
+      const skills = ROLES[role].skills;
+      const numSkills = skills.length;
+      if (Input.pressed('arrowleft') || Input.pressed('a')) { this.skillCursor = (this.skillCursor + numSkills - 1) % numSkills; Sfx.hover(); }
+      if (Input.pressed('arrowright') || Input.pressed('d')) { this.skillCursor = (this.skillCursor + 1) % numSkills; Sfx.hover(); }
+      if (Input.pressed('arrowup') || Input.pressed('w')) { this.skillCursor = (this.skillCursor + numSkills - 1) % numSkills; Sfx.hover(); }
+      if (Input.pressed('arrowdown') || Input.pressed('s')) { this.skillCursor = (this.skillCursor + 1) % numSkills; Sfx.hover(); }
+      if (Input.pressed('enter') || Input.pressed(' ')) {
+        this.partySkills[this.skillSelectIdx] = this.skillCursor;
+        Sfx.select();
+        this.skillSelectIdx++;
+        this.skillCursor = 0;
+        this.skillSubPhase = 'role';
+        if (this.skillSelectIdx >= 3) {
+          this.beginBattle();
+        }
+      }
+      // back to role selection
+      if (Input.pressed('backspace') || Input.pressed('escape') || Input.pressed('q')) {
+        this.skillSubPhase = 'role';
+        Sfx.click();
       }
     }
   }
   beginBattle() {
     this.party = this.party.map((n, i) => {
-      const s = statsFor(n);
-      s.chosenSkill = ROLES[s.role].skills[this.partySkills[i] || 0];
-      s.side = 'party'; s.hp = 0; s.defending = false; s.dead = false; s.flash = 0;
-      s.buffAtk = 0; // attack buff from special
+      const chosenRole = this.partyRoles[i] || roleFor(n);
+      const d = descriptor(n);
+      const base = ROLES[chosenRole].baseStats;
+      const rng = mulberry32(hashStr(n + '#stats'));
+      const s = {
+        name: n, desc: d, role: chosenRole, roleLabel: ROLES[chosenRole].label, roleColor: ROLES[chosenRole].color,
+        maxhp: base.hp + Math.floor(rng() * 30),
+        atk: base.atk + Math.floor(rng() * 8),
+        def: base.def + Math.floor(rng() * 6),
+        spd: base.spd + Math.floor(rng() * 8),
+        chosenSkill: ROLES[chosenRole].skills[this.partySkills[i] || 0],
+        potions: POTIONS,
+        side: 'party', hp: 0, defending: false, dead: false, flash: 0, buffAtk: 0,
+      };
       return s;
     });
     this.party.forEach(u => u.hp = u.maxhp);
@@ -464,63 +501,112 @@ export class Fighting {
   }
   drawSkillSelect(ctx) {
     ctx.fillStyle = '#0a0e1c'; ctx.fillRect(0, 0, W, H);
-    pxTextCenter(ctx, 'CHOOSE SPECIAL SKILL', W / 2, 16, 4, PALETTE.gold);
-    pxTextCenter(ctx, `Member ${this.skillSelectIdx + 1} of 3`, W / 2, 52, 2, PALETTE.dim);
     const name = this.party[this.skillSelectIdx];
-    const role = roleFor(name);
-    const skills = ROLES[role].skills;
     const desc = descriptor(name);
 
-    // Draw the current character preview (left side)
-    drawCharacter(ctx, 160, 120, 5, desc, { t: this.t });
-    pxTextCenter(ctx, name, 160, 230, 3, PALETTE.ink);
-    pxTextCenter(ctx, ROLES[role].label, 160, 258, 2, ROLES[role].color);
-    // base stats
-    const base = ROLES[role].baseStats;
-    pxText(ctx, 'HP  ' + (base.hp), 80, 280, 2, PALETTE.green);
-    pxText(ctx, 'ATK ' + (base.atk), 80, 300, 2, PALETTE.red);
-    pxText(ctx, 'DEF ' + (base.def), 80, 320, 2, PALETTE.blue);
-    pxText(ctx, 'SPD ' + (base.spd), 80, 340, 2, PALETTE.gold);
+    if (this.skillSubPhase === 'role') {
+      pxTextCenter(ctx, 'CHOOSE A ROLE', W / 2, 16, 4, PALETTE.gold);
+      pxTextCenter(ctx, `Member ${this.skillSelectIdx + 1} of 3 — ${name}`, W / 2, 52, 2, PALETTE.dim);
 
-    // Skill list (right side)
-    const listX = 340, listY = 100;
-    for (let i = 0; i < skills.length; i++) {
-      const sk = skills[i];
-      const sy = listY + i * 130;
-      const sel = i === this.skillCursor;
-      const rx = listX, ry = sy, rw = 560, rh = 116;
-      const hov = hover(rx, ry, rw, rh);
-      if (hov && pointer.clicked && !pointer.consumed) {
-        consumeClick();
-        this.skillCursor = i;
-        this.partySkills[this.skillSelectIdx] = i;
-        Sfx.select();
-        this.skillSelectIdx++;
-        this.skillCursor = 0;
-        if (this.skillSelectIdx >= 3) { this.beginBattle(); return; }
+      // Character preview (left)
+      drawCharacter(ctx, 140, 100, 5, desc, { t: this.t });
+      pxTextCenter(ctx, name, 140, 210, 3, PALETTE.ink);
+
+      // Role grid (right) — 4 cols x 2 rows
+      const gridX = 300, gridY = 80, cellW = 150, cellH = 100;
+      for (let i = 0; i < this.roleKeys.length; i++) {
+        const rk = this.roleKeys[i];
+        const role = ROLES[rk];
+        const cx = gridX + (i % 4) * cellW, cy = gridY + Math.floor(i / 4) * cellH;
+        const sel = i === this.roleCursor;
+        const hov = hover(cx + 4, cy + 4, cellW - 8, cellH - 8);
+        if (hov && pointer.clicked && !pointer.consumed) {
+          consumeClick();
+          this.roleCursor = i;
+          this.partyRoles[this.skillSelectIdx] = rk;
+          this.skillSubPhase = 'skill';
+          this.skillCursor = 0;
+          Sfx.select();
+          return;
+        }
+        const border = sel || hov ? role.color : 'rgba(255,255,255,0.08)';
+        fillRoundRect(ctx, cx + 4, cy + 4, cellW - 8, cellH - 8, 8, sel ? PALETTE.panel2 : PALETTE.panel);
+        strokeRoundRect(ctx, cx + 4.5, cy + 4.5, cellW - 9, cellH - 9, 8, 2, border);
+        pxText(ctx, role.label, cx + 16, cy + 16, 2, sel ? role.color : PALETTE.ink);
+        // stats summary
+        const b = role.baseStats;
+        pxText(ctx, 'HP ' + b.hp, cx + 16, cy + 38, 1, PALETTE.green);
+        pxText(ctx, 'ATK ' + b.atk, cx + 16, cy + 52, 1, PALETTE.red);
+        pxText(ctx, 'DEF ' + b.def, cx + 80, cy + 38, 1, PALETTE.blue);
+        pxText(ctx, 'SPD ' + b.spd, cx + 80, cy + 52, 1, PALETTE.gold);
+        // skill names preview
+        pxText(ctx, role.skills[0].name, cx + 16, cy + 70, 1, PALETTE.dim);
+        pxText(ctx, role.skills[1].name, cx + 16, cy + 82, 1, PALETTE.dim);
+        if (sel) pxText(ctx, '>', cx, cy + 16, 3, role.color);
       }
-      const typeColor = sk.type === 'heal' ? PALETTE.green : (sk.type === 'buff' ? PALETTE.gold : PALETTE.red);
-      const border = sel || hov ? typeColor : 'rgba(255,255,255,0.08)';
-      fillRoundRect(ctx, rx, ry, rw, rh, 8, sel ? PALETTE.panel2 : PALETTE.panel);
-      strokeRoundRect(ctx, rx + 0.5, ry + 0.5, rw - 1, rh - 1, 8, 2, border);
-      pxText(ctx, sk.name, rx + 16, ry + 12, 3, sel ? typeColor : PALETTE.ink);
-      pxText(ctx, sk.type.toUpperCase() + (sk.hits ? ' x' + sk.hits : ''), rx + 16, ry + 40, 2, typeColor);
-      pxText(ctx, sk.desc, rx + 16, ry + 62, 2, PALETTE.dim);
-      pxText(ctx, 'POW ' + sk.pow, rx + 16, ry + 84, 2, PALETTE.ink);
-      pxText(ctx, 'USES ' + sk.uses, rx + 120, ry + 84, 2, PALETTE.ink);
-      if (sel) pxText(ctx, '>', rx - 16, ry + 12, 3, typeColor);
+    } else {
+      // Skill selection
+      const role = this.partyRoles[this.skillSelectIdx];
+      const roleData = ROLES[role];
+      const skills = roleData.skills;
+
+      pxTextCenter(ctx, 'CHOOSE A SKILL', W / 2, 16, 4, roleData.color);
+      pxTextCenter(ctx, `${name} — ${roleData.label}`, W / 2, 52, 2, PALETTE.dim);
+
+      // Character + role preview (left)
+      drawCharacter(ctx, 140, 100, 5, desc, { t: this.t });
+      pxTextCenter(ctx, name, 140, 210, 3, PALETTE.ink);
+      pxTextCenter(ctx, roleData.label, 140, 238, 2, roleData.color);
+      const base = roleData.baseStats;
+      pxText(ctx, 'HP  ' + base.hp, 70, 260, 2, PALETTE.green);
+      pxText(ctx, 'ATK ' + base.atk, 70, 280, 2, PALETTE.red);
+      pxText(ctx, 'DEF ' + base.def, 70, 300, 2, PALETTE.blue);
+      pxText(ctx, 'SPD ' + base.spd, 70, 320, 2, PALETTE.gold);
+
+      // Skill list (right)
+      const listX = 300, listY = 80;
+      for (let i = 0; i < skills.length; i++) {
+        const sk = skills[i];
+        const sy = listY + i * 130;
+        const sel = i === this.skillCursor;
+        const rx = listX, ry = sy, rw = 600, rh = 116;
+        const hov = hover(rx, ry, rw, rh);
+        if (hov && pointer.clicked && !pointer.consumed) {
+          consumeClick();
+          this.skillCursor = i;
+          this.partySkills[this.skillSelectIdx] = i;
+          Sfx.select();
+          this.skillSelectIdx++;
+          this.skillCursor = 0;
+          this.skillSubPhase = 'role';
+          if (this.skillSelectIdx >= 3) { this.beginBattle(); return; }
+          return;
+        }
+        const typeColor = sk.type === 'heal' ? PALETTE.green : (sk.type === 'buff' ? PALETTE.gold : PALETTE.red);
+        const border = sel || hov ? typeColor : 'rgba(255,255,255,0.08)';
+        fillRoundRect(ctx, rx, ry, rw, rh, 8, sel ? PALETTE.panel2 : PALETTE.panel);
+        strokeRoundRect(ctx, rx + 0.5, ry + 0.5, rw - 1, rh - 1, 8, 2, border);
+        pxText(ctx, sk.name, rx + 16, ry + 12, 3, sel ? typeColor : PALETTE.ink);
+        pxText(ctx, sk.type.toUpperCase() + (sk.hits ? ' x' + sk.hits : ''), rx + 16, ry + 40, 2, typeColor);
+        pxText(ctx, sk.desc, rx + 16, ry + 62, 2, PALETTE.dim);
+        pxText(ctx, 'POW ' + sk.pow, rx + 16, ry + 84, 2, PALETTE.ink);
+        pxText(ctx, 'USES ' + sk.uses, rx + 120, ry + 84, 2, PALETTE.ink);
+        if (sel) pxText(ctx, '>', rx - 16, ry + 12, 3, typeColor);
+      }
+      pxTextCenter(ctx, 'BACKSPACE/Q: back to roles', W / 2, H - 24, 1, PALETTE.dim);
     }
 
-    // Already chosen skills (bottom)
+    // Already chosen (bottom)
     pxText(ctx, 'TEAM:', 16, H - 56, 2, PALETTE.dim);
     for (let i = 0; i < this.skillSelectIdx; i++) {
       const pn = this.party[i];
-      const sk = ROLES[roleFor(pn)].skills[this.partySkills[i]];
-      pxText(ctx, pn + ': ' + sk.name, 80 + (i % 3) * 240, H - 56, 1, PALETTE.green);
+      const pr = this.partyRoles[i];
+      const sk = ROLES[pr].skills[this.partySkills[i]];
+      pxText(ctx, pn + ': ' + ROLES[pr].label + ' / ' + sk.name, 80 + (i % 3) * 260, H - 56, 1, PALETTE.green);
     }
 
     // Hint
-    pxTextCenter(ctx, 'ARROWS: navigate   ENTER/SPACE: select', W / 2, H - 24, 1, PALETTE.dim);
+    pxTextCenter(ctx, 'ARROWS: navigate   ENTER/SPACE: select', W / 2, H - 38, 1, PALETTE.dim);
   }
   drawBattlefield(ctx) {
     // floor
