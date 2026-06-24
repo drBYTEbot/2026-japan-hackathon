@@ -1,7 +1,7 @@
 // office.js — the main hub: an ai& office with 3 game platforms, claw machine, spawn point
 import { clamp, lerp, rand, TAU, PALETTE, Particles, pxText, pxTextCenter, dist, roundRect as roundRectC, Store } from './util.js';
 import { W, H, Input, button, pointer, hover } from './ui.js';
-import { drawCharacter, descriptor } from './characters.js';
+import { drawCharacter, descriptor, EMPLOYEES } from './characters.js';
 import { Sfx } from './audio.js';
 
 export const WORLD_W = 960, WORLD_H = 1000;
@@ -31,7 +31,9 @@ export class Office {
     this.t = 0;
     this.dust = new Particles();
     this.trail = [];
+    this.npcs = [];
     this.build();
+    this.populateNpcs();
   }
   build() {
     this.furn = [];
@@ -95,11 +97,72 @@ export class Office {
     // collision boxes = walls + furniture (claw machine too)
     this.solid = [...this.walls, ...this.furn, { ...this.claw, type: 'claw' }, { ...this.ceoDesk, type: 'ceoDesk' }];
   }
+  // Define activity spots for collected employees
+  populateNpcs() {
+    this.npcs = [];
+    const owned = Store.owned;
+    if (!owned.length) return;
+    // Desk seats (sit and type) — match the desk bay positions
+    const deskSeats = [
+      { x: 113, y: 265 + OY, type: 'type' },   // desk bay [70, 200+OY] w=86 -> center 113, seat in front
+      { x: 293, y: 265 + OY, type: 'type' },
+      { x: 683, y: 265 + OY, type: 'type' },
+      { x: 863, y: 265 + OY, type: 'type' },
+      { x: 113, y: 385 + OY, type: 'phone' },
+      { x: 293, y: 385 + OY, type: 'write' },
+      { x: 683, y: 385 + OY, type: 'type' },
+      { x: 863, y: 385 + OY, type: 'write' },
+      // reception
+      { x: 135, y: 135 + OY, type: 'phone' },
+      // lounge couch
+      { x: 130, y: 510 + OY, type: 'lounge' },
+      // meeting table seats
+      { x: 430, y: 335 + OY, type: 'write' },
+      { x: 530, y: 335 + OY, type: 'write' },
+      // coffee machine area
+      { x: 580, y: 515 + OY, type: 'lounge' },
+      // water cooler
+      { x: 470, y: 515 + OY, type: 'lounge' },
+      // CEO office couch
+      { x: 810, y: 95, type: 'lounge' },
+      // walking paths
+      { x: 0, y: 0, type: 'walk', path: [[200, 450 + OY], [760, 450 + OY], [760, 550 + OY], [200, 550 + OY]] },
+      { x: 0, y: 0, type: 'walk', path: [[300, 450 + OY], [600, 450 + OY], [600, 620 + OY], [300, 620 + OY]] },
+      { x: 0, y: 0, type: 'walk', path: [[100, 400 + OY], [860, 400 + OY]] },
+    ];
+    // Assign owned employees to spots (capped at available spots)
+    const walkSpots = deskSeats.filter(s => s.type === 'walk');
+    const sitSpots = deskSeats.filter(s => s.type !== 'walk');
+    let sitIdx = 0, walkIdx = 0;
+    for (const name of owned) {
+      if (name === 'David') continue; // David is at his desk already
+      const desc = descriptor(name);
+      if (sitIdx < sitSpots.length) {
+        const spot = sitSpots[sitIdx++];
+        this.npcs.push({
+          name, desc, type: spot.type,
+          x: spot.x, y: spot.y, baseX: spot.x, baseY: spot.y,
+          anim: rand(0, TAU), phase: rand(0, TAU), face: 1,
+          walkPath: null, walkIdx: 0, walkT: 0,
+        });
+      } else if (walkIdx < walkSpots.length) {
+        const spot = walkSpots[walkIdx++];
+        this.npcs.push({
+          name, desc, type: 'walk',
+          x: spot.path[0][0], y: spot.path[0][1],
+          baseX: spot.path[0][0], baseY: spot.path[0][1],
+          anim: 0, phase: rand(0, TAU), face: 1,
+          walkPath: spot.path, walkIdx: 0, walkT: 0,
+        });
+      }
+    }
+  }
   onEnter() {
     this.player.x = this.spawn.x; this.player.y = this.spawn.y;
     this.player.vx = 0; this.player.vy = 0;
     this.lockout = 0.9;
     this.activePlatform = null; this.enterTimer = 0; this.enterGame = null;
+    this.populateNpcs();
   }
   update(dt) {
     this.t += dt;
@@ -180,6 +243,9 @@ export class Office {
     if (Math.random() < dt * 6) this.dust.burst(rand(0, W), rand(0, H) + this.cam.y, 1, { color: 'rgba(255,255,255,0.25)', speed: 8, life: 4, size: 2 });
     this.dust.update(dt);
 
+    // update NPCs
+    this.updateNpcs(dt);
+
     // glowing trail when all stickers collected
     if (Store.allStickersCollected()) {
       this.trail.push({ x: this.player.x, y: this.player.y - 20, life: 0.8, max: 0.8, hue: (this.t * 120) % 360 });
@@ -224,6 +290,8 @@ export class Office {
     for (const f of items) this.drawFurniture(ctx, f);
     // logo board on wall
     this.drawLogoBoard(ctx);
+    // NPCs (collected employees working in the office)
+    this.drawNpcs(ctx);
     // platforms
     for (const p of this.platforms) this.drawPlatform(ctx, p);
     // boss platform
@@ -378,6 +446,55 @@ export class Office {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
+  }
+  updateNpcs(dt) {
+    for (const npc of this.npcs) {
+      npc.anim += dt;
+      if (npc.type === 'walk' && npc.walkPath) {
+        npc.walkT += dt * 60; // speed
+        const from = npc.walkPath[npc.walkIdx];
+        const to = npc.walkPath[(npc.walkIdx + 1) % npc.walkPath.length];
+        const segLen = dist(from[0], from[1], to[0], to[1]);
+        const k = clamp(npc.walkT / segLen, 0, 1);
+        npc.x = lerp(from[0], to[0], k);
+        npc.y = lerp(from[1], to[1], k);
+        npc.face = to[0] < from[0] ? -1 : 1;
+        if (k >= 1) { npc.walkIdx = (npc.walkIdx + 1) % npc.walkPath.length; npc.walkT = 0; }
+      }
+    }
+  }
+  drawNpcs(ctx) {
+    // sort by y for depth
+    const sorted = [...this.npcs].sort((a, b) => a.y - b.y);
+    for (const npc of sorted) {
+      const bob = Math.sin(npc.anim * 2.4 + npc.phase) * 0.6;
+      // shadow
+      ctx.save(); ctx.globalAlpha = 0.2; ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.ellipse(npc.x, npc.y + 2, 10, 4, 0, 0, TAU); ctx.fill(); ctx.restore();
+
+      if (npc.type === 'type') {
+        // sitting at desk, typing — small bob, facing desk
+        const typeBob = Math.sin(npc.anim * 8) * 1;
+        drawCharacter(ctx, npc.x, npc.y - 38 + typeBob, 2, npc.desc, { t: this.t, flip: false });
+      } else if (npc.type === 'phone') {
+        // phone call — slight sway
+        const sway = Math.sin(npc.anim * 1.5 + npc.phase) * 2;
+        drawCharacter(ctx, npc.x + sway, npc.y - 38, 2, npc.desc, { t: this.t, flip: npc.face < 0 });
+        // phone icon
+        ctx.fillStyle = '#2a2f44'; ctx.fillRect(npc.x + sway + 6, npc.y - 52, 4, 6);
+      } else if (npc.type === 'write') {
+        // writing — lean forward
+        const lean = Math.sin(npc.anim * 3 + npc.phase) * 1;
+        drawCharacter(ctx, npc.x, npc.y - 38 + lean, 2, npc.desc, { t: this.t, flip: false });
+      } else if (npc.type === 'lounge') {
+        // lounging — relaxed bob
+        drawCharacter(ctx, npc.x, npc.y - 36 + bob, 2, npc.desc, { t: this.t, flip: npc.face < 0 });
+      } else if (npc.type === 'walk') {
+        // walking
+        const walkBob = Math.sin(npc.anim * 10) * 1.5;
+        drawCharacter(ctx, npc.x, npc.y - 38 + walkBob, 2, npc.desc, { t: this.t, flip: npc.face < 0 });
+      }
+    }
   }
   drawFurniture(ctx, f) {
     ctx.save();
