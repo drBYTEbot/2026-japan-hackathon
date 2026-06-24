@@ -4,6 +4,10 @@
 
 Built for the **2026 Japan Hackathon**.
 
+**Play it (GitHub Pages):** https://drbytebot.github.io/2026-japan-hackathon/
+**Play it (Build.io):** https://arcadia-2026-japan-hackathon-556245b2.onbld.com/
+**Repo:** https://github.com/drBYTEbot/2026-japan-hackathon
+
 ---
 
 ## What is it?
@@ -159,18 +163,21 @@ gh api -X POST /repos/<USER>/2026-japan-hackathon/pages -f source[branch]=main -
 # → https://<USER>.github.io/2026-japan-hackathon/
 ```
 
-### Build.io
+### Build.io (also deployed)
 
-The Build.io platform (`bld` CLI) deploys straight from a GitHub repo. After pushing:
+The Build.io CLI (`bld`) deploys straight from a Git remote (Heroku-style). This app uses the Node.js buildpack with a zero-dependency static server (`serve.js`) declared in the `Procfile`:
 
 ```bash
-bld login                              # authenticate with your Build account
-bld apps:create 2026-japan-hackathon   # title the app "2026 Japan Hackathon"
-# In the Build dashboard: Deploy tab → connect the repo → Deploy Branch (main).
-# Or enable Automatic Deploys to redeploy on every push.
+bld login                                          # authenticate (browser OAuth)
+bld apps:create arcadia-2026-japan-hackathon       # create the app (lowercase)
+bld buildpacks:set heroku/nodejs -a arcadia-2026-japan-hackathon
+GIT_URL=$(bld apps:info -a arcadia-2026-japan-hackathon -j | jq -r '.git_url')
+git remote add bld "$GIT_URL"
+git push bld main                                  # build + deploy
+bld ps:scale web=1 -a arcadia-2026-japan-hackathon # (auto-scaled on push)
 ```
 
-> Note: the `bld` command in some environments is an unrelated Python build tool. Install the real Build.io CLI from `github.com/buildio/cli` (Crystal-based).
+> The app name on Build.io must be lowercase, so it's `arcadia-2026-japan-hackathon` (the project itself is titled **2026 Japan Hackathon**). The live Build.io URL is shown above.
 
 ---
 
