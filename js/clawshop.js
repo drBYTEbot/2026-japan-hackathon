@@ -23,6 +23,8 @@ export class ClawShop {
     this.capsule = null;
     this.reveal = null; // {name, isNew, scale, life}
     this.prizes = this.makePrizes();
+    this.autoPlay = false;
+    this.autoCount = 0;
     this.msg = 'Insert coins to win a teammate sticker!';
   }
   makePrizes() {
@@ -44,8 +46,7 @@ export class ClawShop {
 
     if (this.phase === 'playing') this.updatePlay(dt);
     if (this.phase === 'reveal') this.updateReveal(dt);
-  }
-  updatePlay(dt) {
+  }  updatePlay(dt) {
     this.timer += dt;
     const T = this.timer;
     const target = this._target;
@@ -79,6 +80,17 @@ export class ClawShop {
       this.reveal.scale = lerp(this.reveal.scale, 1, 1 - Math.pow(0.001, dt));
       if (this.reveal.life > 0.2 && !this.reveal._burst) { this.reveal._burst = true; for (let i = 0; i < 30; i++) this.parts.burst(W / 2, 300, 1, { color: this.reveal.isNew ? PALETTE.gold : PALETTE.blue, speed: 200, life: 0.9, size: 4, up: 40 }); Sfx.clawWin(); }
     }
+    // auto-play: auto-collect after 1.2s and immediately play again
+    if (this.autoPlay && this.reveal && this.reveal.life > 1.2) {
+      this.capsule = null; this.reveal = null;
+      if (Store.coins >= COST) {
+        this.phase = 'idle';
+        this.tryPlay();
+      } else {
+        this.phase = 'idle'; this.autoPlay = false;
+        this.msg = 'Out of coins! Collected ' + this.autoCount + ' stickers.';
+      }
+    }
   }
   startReveal(name) {
     const isNew = !Store.owns(name);
@@ -92,6 +104,7 @@ export class ClawShop {
     if (this.phase !== 'idle') return;
     if (Store.coins < COST) { Sfx.deny(); this.msg = 'Not enough coins!'; return; }
     Store.addCoins(-COST);
+    if (this.autoPlay) this.autoCount++;
     Sfx.clawGrab();
     // choose winner (favor unowned)
     const unowned = EMPLOYEES.filter(n => !Store.owns(n));
@@ -102,6 +115,15 @@ export class ClawShop {
     this._target = choice(this.prizes);
     this.phase = 'playing'; this.timer = 0;
     this.msg = 'Grabbing a prize...';
+  }
+  startAutoPlay() {
+    if (Store.coins < COST) { Sfx.deny(); this.msg = 'Not enough coins!'; return; }
+    this.autoPlay = true;
+    this.autoCount = 0;
+    this.tryPlay();
+  }
+  stopAutoPlay() {
+    this.autoPlay = false;
   }
 
   draw(ctx) {
@@ -116,12 +138,24 @@ export class ClawShop {
     this.drawMachine(ctx);
     this.drawCollection(ctx);
 
-    // insert coins button (bottom of machine)
+    // insert 1 coin button (bottom of machine)
     const enough = Store.coins >= COST;
-    if (this.phase === 'idle' && button(ctx, 110, 470, 180, 44, 'INSERT ' + COST, { scale: 3, fg: enough ? PALETTE.gold : PALETTE.dim, bg: enough ? '#2a2140' : PALETTE.panel, border: enough ? PALETTE.gold : 'rgba(255,255,255,0.08)' })) {
+    if (this.phase === 'idle' && !this.autoPlay && button(ctx, 60, 470, 130, 44, 'INSERT 1', { scale: 2, fg: enough ? PALETTE.gold : PALETTE.dim, bg: enough ? '#2a2140' : PALETTE.panel, border: enough ? PALETTE.gold : 'rgba(255,255,255,0.08)' })) {
       this.tryPlay();
     }
-    if (this.phase === 'idle') { pxText(ctx, 'YOU HAVE ' + Store.coins, 110, 446, 2, PALETTE.dim); }
+    // insert all coins button
+    const canAll = Store.coins >= COST;
+    const allLabel = 'INSERT ALL (' + Store.coins + ')';
+    if (this.phase === 'idle' && !this.autoPlay && button(ctx, 200, 470, 200, 44, allLabel, { scale: 2, fg: canAll ? PALETTE.accent : PALETTE.dim, bg: canAll ? '#1a3a30' : PALETTE.panel, border: canAll ? PALETTE.accent : 'rgba(255,255,255,0.08)' })) {
+      this.startAutoPlay();
+    }
+    // stop auto-play button
+    if (this.autoPlay && button(ctx, 60, 470, 200, 44, 'STOP', { scale: 2, fg: PALETTE.red, bg: '#3a1a20', border: PALETTE.red })) {
+      this.stopAutoPlay();
+      this.msg = 'Stopped. Insert coins to play again.';
+    }
+    if (this.phase === 'idle' && !this.autoPlay) { pxText(ctx, 'YOU HAVE ' + Store.coins + ' COINS', 60, 446, 2, PALETTE.dim); }
+    if (this.autoPlay) { pxText(ctx, 'AUTO-PLAYING... ' + this.autoCount + ' won', 60, 446, 2, PALETTE.accent); }
 
     this.parts.draw(ctx);
 
