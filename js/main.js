@@ -188,8 +188,8 @@ class App {
     tg.addColorStop(0, 'rgba(123,92,255,0.16)'); tg.addColorStop(1, 'rgba(123,92,255,0)');
     ctx.fillStyle = tg; ctx.fillRect(W / 2 - 200, 0, 400, 200);
 
-    // === ai& logo ===
-    drawLogo(ctx, W / 2 - 18, 28 + Math.sin(t * 2) * 2, 36, t);
+    // === ai& logo (top-left corner) ===
+    drawLogo(ctx, 20, 18 + Math.sin(t * 2) * 2, 28, t);
 
     // === title text — wave + rainbow color cycle ===
     const title = 'ARCAIDIA', sc = 3, adv = 6 * sc;
