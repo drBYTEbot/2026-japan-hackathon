@@ -405,9 +405,9 @@ export class Fighting {
     panel(ctx, bx, by, bw, bh, { border: win ? PALETTE.gold : PALETTE.red });
     pxTextCenter(ctx, win ? 'VICTORY!' : 'PARTY WIPED', W / 2, by + 30, 5, win ? PALETTE.gold : PALETTE.red);
     pxTextCenter(ctx, win ? 'You cleared all 3 floors!' : 'The deadline won...', W / 2, by + 84, 2, PALETTE.dim);
-    pxTextCenter(ctx, win ? '+35 COINS' : 'NO COINS', W / 2, by + 112, 4, win ? PALETTE.green : PALETTE.dim);
+    pxTextCenter(ctx, win ? '+20 COINS' : 'NO COINS', W / 2, by + 112, 4, win ? PALETTE.green : PALETTE.dim);
     if (this.endTimer > 0.4 && button(ctx, W / 2 - 90, by + bh - 52, 180, 38, 'BACK TO OFFICE', { scale: 2 })) {
-      this.app.exitGame(win ? 'win' : 'lose', win ? 35 : 0);
+      this.app.exitGame(win ? 'win' : 'lose', win ? 20 : 0);
     }
   }
 }

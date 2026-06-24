@@ -9,8 +9,9 @@ import { RushHour } from './rushhour.js';
 import { CrossyRoad } from './crossyroad.js';
 import { Fighting } from './fighting.js';
 import { ClawShop } from './clawshop.js';
+import { BossGame } from './bossgame.js';
 
-const GAME_FOR = { rush: { scene: 'rush', music: 'rush' }, crossy: { scene: 'crossy', music: 'crossy' }, fight: { scene: 'fight', music: 'fight' } };
+const GAME_FOR = { rush: { scene: 'rush', music: 'rush' }, crossy: { scene: 'crossy', music: 'crossy' }, fight: { scene: 'fight', music: 'fight' }, boss: { scene: 'boss', music: 'fight' } };
 
 class App {
   constructor(canvas) {
@@ -24,6 +25,7 @@ class App {
       rush: new RushHour(this),
       crossy: new CrossyRoad(this),
       fight: new Fighting(this),
+      boss: new BossGame(this),
       shop: new ClawShop(this),
     };
     this.scenes.office.onEnter();

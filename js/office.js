@@ -4,14 +4,16 @@ import { W, H, Input, button, pointer, hover, drawLogo } from './ui.js';
 import { drawCharacter, descriptor } from './characters.js';
 import { Sfx } from './audio.js';
 
-export const WORLD_W = 960, WORLD_H = 720;
+export const WORLD_W = 960, WORLD_H = 1000;
+const OY = 260; // office offset: main office shifts down 260px, CEO office above
 const TILE = 48;
 
 // game platform definitions
 export const GAMES = [
   { id: 'rush', name: 'DESK JAM', sub: 'Rush Hour', diff: 'EASY', reward: 20, color: PALETTE.green, desc: 'Slide desks aside. Escape the office!' },
-  { id: 'crossy', name: 'CROSSWALK', sub: 'Crossy Road', diff: 'MEDIUM', reward: 25, color: PALETTE.blue, desc: 'Cross the road. Dodge the cars.' },
-  { id: 'fight', name: 'PIXEL BRAWL', sub: 'Turn Battle', diff: 'HARD', reward: 35, color: PALETTE.red, desc: '8-bit party battle. 3 floors.' },
+  { id: 'crossy', name: 'CROSSWALK', sub: 'Crossy Road', diff: 'MEDIUM', reward: 20, color: PALETTE.blue, desc: 'Cross the road. Dodge the cars.' },
+  { id: 'fight', name: 'PIXEL BRAWL', sub: 'Turn Battle', diff: 'HARD', reward: 20, color: PALETTE.red, desc: '8-bit party battle. 3 floors.' },
+  { id: 'boss', name: 'BEAT THE CEO', sub: 'Final Boss', diff: 'BOSS', reward: 20, color: PALETTE.gold, desc: 'Cross, escape, then fight David solo!' },
 ];
 
 const PLAYER_DESC = (() => { const d = descriptor('ArcAIdia-Hero'); d.shirt = '#3a6df0'; d.hair = '#241a12'; d.hat = null; d.glasses = false; return d; })();
@@ -19,9 +21,9 @@ const PLAYER_DESC = (() => { const d = descriptor('ArcAIdia-Hero'); d.shirt = '#
 export class Office {
   constructor(app) {
     this.app = app;
-    this.player = { x: 480, y: 400, vx: 0, vy: 0, face: 1, anim: 0, speed: 175 };
+    this.player = { x: 480, y: 400 + OY, vx: 0, vy: 0, face: 1, anim: 0, speed: 175 };
     this.cam = { y: 0 };
-    this.spawn = { x: 480, y: 400 };
+    this.spawn = { x: 480, y: 400 + OY };
     this.activePlatform = null;
     this.enterTimer = 0;       // counts up while on a platform
     this.enterGame = null;     // game id pending
@@ -33,45 +35,64 @@ export class Office {
   build() {
     this.furn = [];
     const wall = 22;
+    // CEO office walls (top section, y=0 to OY)
     this.walls = [
       { x: 0, y: 0, w: WORLD_W, h: wall }, { x: 0, y: WORLD_H - wall, w: WORLD_W, h: wall },
       { x: 0, y: 0, w: wall, h: WORLD_H }, { x: WORLD_W - wall, y: 0, w: wall, h: WORLD_H },
+      // dividing wall between CEO office and main office (with doorway gap at center)
+      { x: 0, y: OY, w: 400, h: wall }, { x: 540, y: OY, w: 420, h: wall },
     ];
+    // === CEO office (David's office, top section) ===
+    this.ceoDesk = { x: 360, y: 50, w: 240, h: 70 };
+    this.furn.push({ ...this.ceoDesk, type: 'ceoDesk' });
+    // CEO bookshelf
+    this.furn.push({ x: 60, y: 50, w: 120, h: 30, type: 'shelf' });
+    // CEO plant
+    this.furn.push({ x: 60, y: 130, w: 30, h: 30, type: 'plant' });
+    this.furn.push({ x: 890, y: 130, w: 30, h: 30, type: 'plant' });
+    // CEO couch
+    this.furn.push({ x: 750, y: 50, w: 120, h: 44, type: 'couch' });
+    // nameplate (decoration)
+    this.ceoNameplate = { x: 380, y: 22, w: 200, h: 22 };
+
+    // === Main office (shifted down by OY) ===
     // reception desk (top-left)
-    this.furn.push({ x: 60, y: 70, w: 150, h: 44, type: 'reception' });
+    this.furn.push({ x: 60, y: 70 + OY, w: 150, h: 44, type: 'reception' });
     // whiteboard with logo (decoration, not collision)
-    this.logoBoard = { x: 384, y: 22, w: 192, h: 70 };
+    this.logoBoard = { x: 384, y: 22 + OY, w: 192, h: 70 };
     // engineering desk bays
     const bays = [
-      [70, 200], [250, 200], [640, 200], [820, 200],
-      [70, 320], [250, 320], [640, 320], [820, 320],
+      [70, 200 + OY], [250, 200 + OY], [640, 200 + OY], [820, 200 + OY],
+      [70, 320 + OY], [250, 320 + OY], [640, 320 + OY], [820, 320 + OY],
     ];
     for (const [bx, by] of bays) this.furn.push({ x: bx, y: by, w: 86, h: 56, type: 'desk', hue: rand(0, 360) });
     // meeting table (center)
-    this.furn.push({ x: 410, y: 250, w: 140, h: 70, type: 'table' });
+    this.furn.push({ x: 410, y: 250 + OY, w: 140, h: 70, type: 'table' });
     // plants
-    this.furn.push({ x: 40, y: 150, w: 30, h: 30, type: 'plant' });
-    this.furn.push({ x: 890, y: 150, w: 30, h: 30, type: 'plant' });
-    this.furn.push({ x: 40, y: 660, w: 30, h: 30, type: 'plant' });
-    this.furn.push({ x: 890, y: 660, w: 30, h: 30, type: 'plant' });
+    this.furn.push({ x: 40, y: 150 + OY, w: 30, h: 30, type: 'plant' });
+    this.furn.push({ x: 890, y: 150 + OY, w: 30, h: 30, type: 'plant' });
+    this.furn.push({ x: 40, y: 660 + OY, w: 30, h: 30, type: 'plant' });
+    this.furn.push({ x: 890, y: 660 + OY, w: 30, h: 30, type: 'plant' });
     // water cooler
-    this.furn.push({ x: 430, y: 470, w: 34, h: 34, type: 'cooler' });
+    this.furn.push({ x: 430, y: 470 + OY, w: 34, h: 34, type: 'cooler' });
     // couch (lounge)
-    this.furn.push({ x: 70, y: 470, w: 120, h: 44, type: 'couch' });
+    this.furn.push({ x: 70, y: 470 + OY, w: 120, h: 44, type: 'couch' });
     // bookshelf
-    this.furn.push({ x: 770, y: 470, w: 120, h: 30, type: 'shelf' });
+    this.furn.push({ x: 770, y: 470 + OY, w: 120, h: 30, type: 'shelf' });
     // coffee machine
-    this.furn.push({ x: 600, y: 470, w: 40, h: 34, type: 'coffee' });
-    // claw machine (top-right corner)
-    this.claw = { x: 820, y: 90, w: 80, h: 64 };
+    this.furn.push({ x: 600, y: 470 + OY, w: 40, h: 34, type: 'coffee' });
+    // claw machine (top-right corner of main office)
+    this.claw = { x: 820, y: 90 + OY, w: 80, h: 64 };
     // platforms (bottom row)
     this.platforms = [
-      { ...GAMES[0], x: 200, y: 600, w: 120, h: 80 },
-      { ...GAMES[1], x: 480, y: 600, w: 120, h: 80 },
-      { ...GAMES[2], x: 760, y: 600, w: 120, h: 80 },
+      { ...GAMES[0], x: 200, y: 600 + OY, w: 120, h: 80 },
+      { ...GAMES[1], x: 480, y: 600 + OY, w: 120, h: 80 },
+      { ...GAMES[2], x: 760, y: 600 + OY, w: 120, h: 80 },
     ];
+    // CEO boss platform (in David's office, in front of his desk)
+    this.bossPlatform = { ...GAMES[3], x: 480, y: 170, w: 100, h: 60 };
     // collision boxes = walls + furniture (claw machine too)
-    this.solid = [...this.walls, ...this.furn, { ...this.claw, type: 'claw' }];
+    this.solid = [...this.walls, ...this.furn, { ...this.claw, type: 'claw' }, { ...this.ceoDesk, type: 'ceoDesk' }];
   }
   onEnter() {
     this.player.x = this.spawn.x; this.player.y = this.spawn.y;
@@ -104,10 +125,19 @@ export class Office {
 
     // ---- platform activation ----
     let onPlat = null;
+    // check regular platforms
     for (const p of this.platforms) {
       const px = this.player.x, py = this.player.y;
       if (px > p.x - p.w / 2 - 20 && px < p.x + p.w / 2 + 20 && py > p.y - p.h / 2 - 10 && py < p.y + p.h / 2 + 30) {
         onPlat = p; break;
+      }
+    }
+    // check boss platform
+    if (!onPlat) {
+      const bp = this.bossPlatform;
+      const px = this.player.x, py = this.player.y;
+      if (px > bp.x - bp.w / 2 - 20 && px < bp.x + bp.w / 2 + 20 && py > bp.y - bp.h / 2 - 10 && py < bp.y + bp.h / 2 + 30) {
+        onPlat = bp;
       }
     }
     // claw machine proximity
@@ -165,6 +195,8 @@ export class Office {
     ctx.save();
     ctx.translate(0, -this.cam.y);
     this.drawFloor(ctx);
+    // CEO office decorations
+    this.drawCeoOffice(ctx);
     // spawn pad
     this.drawSpawnPad(ctx);
     // furniture (sorted by y for depth)
@@ -174,6 +206,8 @@ export class Office {
     this.drawLogoBoard(ctx);
     // platforms
     for (const p of this.platforms) this.drawPlatform(ctx, p);
+    // boss platform
+    this.drawPlatform(ctx, this.bossPlatform);
     // player
     this.drawPlayer(ctx);
     this.dust.draw(ctx);
@@ -182,23 +216,45 @@ export class Office {
     // screen-space prompts
     this.drawPrompts(ctx);
   }
+  drawCeoOffice(ctx) {
+    // different floor color for CEO office
+    ctx.fillStyle = '#d8c8a0'; ctx.fillRect(22, 22, WORLD_W - 44, OY - 22);
+    // tile grid
+    ctx.strokeStyle = 'rgba(160,130,80,0.15)'; ctx.lineWidth = 1;
+    for (let x = TILE; x < WORLD_W; x += TILE) { ctx.beginPath(); ctx.moveTo(x, 22); ctx.lineTo(x, OY); ctx.stroke(); }
+    for (let y = TILE; y < OY; y += TILE) { ctx.beginPath(); ctx.moveTo(22, y); ctx.lineTo(WORLD_W - 22, y); ctx.stroke(); }
+    // fancy rug under desk
+    ctx.save(); ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#8a3a3a'; roundRectC(ctx, 320, 40, 320, 100, 8); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'; roundRectC(ctx, 332, 52, 296, 76, 4); ctx.fill();
+    ctx.restore();
+    // nameplate on wall
+    const np = this.ceoNameplate;
+    ctx.fillStyle = '#2a1f3a'; roundRectC(ctx, np.x, np.y, np.w, np.h, 4); ctx.fill();
+    ctx.fillStyle = PALETTE.gold; roundRectC(ctx, np.x + 2, np.y + 2, np.w - 4, np.h - 4, 3); ctx.fill();
+    pxTextCenter(ctx, 'DAVID  CEO', np.x + np.w / 2, np.y + 6, 2, '#2a1f3a');
+    // doorway label
+    pxTextCenter(ctx, 'CEO OFFICE', 480, OY - 4, 2, 'rgba(120,90,40,0.5)');
+  }
   drawFloor(ctx) {
     // base
     ctx.fillStyle = '#cfd6e6'; ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-    // carpet border
-    ctx.fillStyle = '#b9c2d8'; ctx.fillRect(22, 22, WORLD_W - 44, WORLD_H - 44);
-    // tile grid
+    // carpet border (main office only)
+    ctx.fillStyle = '#b9c2d8'; ctx.fillRect(22, OY, WORLD_W - 44, WORLD_H - OY - 44);
+    // tile grid (main office)
     ctx.strokeStyle = 'rgba(120,130,160,0.18)'; ctx.lineWidth = 1;
-    for (let x = TILE; x < WORLD_W; x += TILE) { ctx.beginPath(); ctx.moveTo(x, 22); ctx.lineTo(x, WORLD_H - 22); ctx.stroke(); }
-    for (let y = TILE; y < WORLD_H; y += TILE) { ctx.beginPath(); ctx.moveTo(22, y); ctx.lineTo(WORLD_W - 22, y); ctx.stroke(); }
+    for (let x = TILE; x < WORLD_W; x += TILE) { ctx.beginPath(); ctx.moveTo(x, OY); ctx.lineTo(x, WORLD_H - 22); ctx.stroke(); }
+    for (let y = OY + TILE; y < WORLD_H; y += TILE) { ctx.beginPath(); ctx.moveTo(22, y); ctx.lineTo(WORLD_W - 22, y); ctx.stroke(); }
     // meeting rug
     ctx.save(); ctx.globalAlpha = 0.5;
-    ctx.fillStyle = '#7b6bd6'; roundRectC(ctx, 390, 240, 180, 90, 10); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.08)'; roundRectC(ctx, 404, 254, 152, 62, 6); ctx.fill();
+    ctx.fillStyle = '#7b6bd6'; roundRectC(ctx, 390, 240 + OY, 180, 90, 10); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'; roundRectC(ctx, 404, 254 + OY, 152, 62, 6); ctx.fill();
     ctx.restore();
     // wall top highlight
     ctx.fillStyle = '#9aa3bd'; ctx.fillRect(0, 0, WORLD_W, 22);
     ctx.fillStyle = '#7f88a4'; ctx.fillRect(0, 0, WORLD_W, 6);
+    // dividing wall highlight
+    ctx.fillStyle = '#9aa3bd'; ctx.fillRect(0, OY, 400, 4); ctx.fillRect(540, OY, 420, 4);
   }
   drawSpawnPad(ctx) {
     const { x, y } = this.spawn;
@@ -280,6 +336,7 @@ export class Office {
     ctx.save();
     switch (f.type) {
       case 'desk': this.desk(ctx, f); break;
+      case 'ceoDesk': this.ceoDeskDraw(ctx, f); break;
       case 'reception': this.reception(ctx, f); break;
       case 'table': this.table(ctx, f); break;
       case 'plant': this.plant(ctx, f); break;
@@ -290,6 +347,26 @@ export class Office {
       case 'claw': this.clawMachine(ctx, f); break;
     }
     ctx.restore();
+  }
+  ceoDeskDraw(ctx, f) {
+    this.shadowBox(ctx, f.x, f.y, f.w, f.h);
+    // executive desk — darker, richer wood
+    const g = ctx.createLinearGradient(f.x, f.y, f.x, f.y + f.h);
+    g.addColorStop(0, '#8a5a2a'); g.addColorStop(1, '#6a4220');
+    ctx.fillStyle = g; roundRectC(ctx, f.x, f.y, f.w, f.h, 6); ctx.fill();
+    ctx.fillStyle = '#5a3618'; ctx.fillRect(f.x, f.y + f.h - 8, f.w, 8);
+    // big monitor
+    ctx.fillStyle = '#1a1f30'; roundRectC(ctx, f.x + f.w / 2 - 40, f.y - 36, 80, 30, 3); ctx.fill();
+    ctx.fillStyle = '#2a3050'; ctx.fillRect(f.x + f.w / 2 - 37, f.y - 33, 74, 24);
+    ctx.fillStyle = '#39d2a0'; ctx.fillRect(f.x + f.w / 2 - 33, f.y - 30, 66, 18);
+    // name plate on desk
+    ctx.fillStyle = PALETTE.gold; ctx.fillRect(f.x + 10, f.y + 8, 50, 12);
+    pxText(ctx, 'DAVID', f.x + 14, f.y + 11, 1, '#2a1f3a');
+    // coffee mug
+    ctx.fillStyle = '#e25c5c'; ctx.fillRect(f.x + f.w - 24, f.y - 8, 14, 12);
+    // chair behind desk
+    ctx.fillStyle = '#2a1f3a'; roundRectC(ctx, f.x + f.w / 2 - 20, f.y + f.h + 4, 40, 30, 6); ctx.fill();
+    ctx.fillStyle = '#1a1525'; ctx.fillRect(f.x + f.w / 2 - 20, f.y + f.h + 4, 40, 8);
   }
   shadowBox(ctx, x, y, w, h) { ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = '#000'; roundRectC(ctx, x + 3, y + 4, w, h, 6); ctx.fill(); ctx.restore(); }
   desk(ctx, f) {
