@@ -63,7 +63,7 @@ Every sticker is a deterministic, procedurally-drawn 8-bit chibi avatar — skin
 
 ### Employee directory (prize pool)
 
-Saria · Noa · Feifan · Noah · Hana · Sumer · Shimpei · Misaki · David · Rajendra · Richard · Shin On · Lamu · Atul Anand · Sakuarko · Amelia · Mike · Millan · Mao · Nao · Tetsuya · Mutsumi · Mario · Sophia · Matt · Alex · Masamichi · Kazunori · Samantha · Mustafa · Yushi · Yagiz · Takanori · Takeru · Yu · Uchida · Obama · Jun · Ryuei · Ayuki · Satoshi · Hirokazu · Hiroyuki · John · Shearin · Akimitsu · Steven · Matthew · Yuhei
+Saria · Noa · Feifan · Noah · Hana · Sumer · Shimpei · Misaki · David · Rajendra · Richard · Shinon · Lamu · Atul Anand · Sakuarko · Amelia · Mike · Millan · Mao · Nao · Tetsuya · Mutsumi · Mario · Sophia · Matt · Alex · Masamichi · Kazunori · Samantha · Mustafa · Yushi · Yagiz · Takanori · Takeru · Yu · Uchida · Obama · Jun · Ryuei · Ayuki · Satoshi · Hirokazu · Hiroyuki · John · Shearin · Akimitsu · Steven · Matthew · Yuhei
 
 ---
 
